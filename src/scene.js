@@ -454,16 +454,19 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
   const hit = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
   function updateLabels(precise) {
     const w = container.clientWidth, h = container.clientHeight;
-    const tRects = towerRects(w, h); const placed = []; const ui = [];
+    const tRects = towerRects(w, h); const placed = []; const panels = [];
     const cr = container.getBoundingClientRect();
     for (const el of document.querySelectorAll(LABEL_AVOID)) {
-      if (el.hidden || el.offsetParent === null) continue;
+      if (el.hidden) continue;
+      const cs = getComputedStyle(el);
+      if (cs.display === 'none' || cs.visibility === 'hidden') continue;
       const r = el.getBoundingClientRect();
       if (r.width < 2 || r.height < 2) continue;
       const box = [r.left - cr.left, r.top - cr.top, r.right - cr.left, r.bottom - cr.top];
       placed.push(box);
-      ui.push({ l: box[0], t: box[1], r: box[2], b: box[3] });
+      panels.push({ l: box[0], t: box[1], r: box[2], b: box[3] });
     }
+    const ui = panels.slice();
     const header = document.querySelector('.header');
     if (header) {
       const hb = header.getBoundingClientRect().bottom - cr.top + 8;
@@ -490,7 +493,6 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         if (p.r - p.l > w * 0.7 && p.t < h * 0.4 && p.b < h * 0.55) towerRowTop = Math.max(towerRowTop, p.b + 4);
       }
       const band = { l: 0, t: towerRowTop, r: w, b: towerRowTop + 52 };
-      ui.push(band);
       placed.push([band.l, band.t, band.r, band.b]);
     }
     // read phase
@@ -519,8 +521,12 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
               if (clearOf(r, false)) { lx = x; lift = d; placed.push(r); found = true; break search; }
             }
           }
-          if (!found) { lx = clampX(o.sx); lift = 0; show = true; placed.push(rectAt(lx, 0)); }
-          else show = true;
+          if (!found) {
+            lx = clampX(o.sx); lift = 0;
+            const r = rectAt(lx, 0);
+            if (!panels.some((p) => hit(r, p))) { show = true; placed.push(r); }
+            else show = false;
+          }
         } else {
           const cands = [];
           for (const d of [0, 36, 72]) {
@@ -531,7 +537,10 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
           show = false;
           for (const [x, d] of cands) { if (Math.abs(x - o.sx) > 280) continue; const r = rectAt(x, d); if (clearOf(r, true)) { lx = x; lift = d; show = true; placed.push(r); break; } }
           // Last resort stays inside the viewport and off other labels, even if it sits over a tower.
-          if (!show && it.priority < 13) { lx = clampX(o.sx); show = true; placed.push(rectAt(lx, 0)); }
+          if (!show && it.priority < 13) {
+            const r = rectAt(clampX(o.sx), 0);
+            if (clearOf(r, true)) { lx = clampX(o.sx); show = true; placed.push(r); }
+          }
         }
       }
       it._sx = o.sx; it._lx = lx; it._sy = o.sy; it._lift = lift; it._lw = o.lw; it._lh = o.lh;
@@ -727,41 +736,36 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     }
     packPhoneTowers();
     function packPhoneTowers() {
-      if (w >= 520) return;
-      const towers = shown.filter((o) => o.it.isTower && o.it.el.style.opacity !== '0');
+      if (w >= 520 || w > h) return;
+      const towers = items.filter((o) => o.it.isTower && o.vis);
       if (towers.length < 2) return;
-      const rects = towers.map((o) => ({ o, b: rectOf(o.it) }));
-      const rowTop = towerRowTop;
-      rects.sort((a, c) => a.o.it._sx - c.o.it._sx);
-      const widths = rects.map((x) => Math.max(44, x.b.r - x.b.l));
-      const raw = widths.reduce((s, v) => s + v, 0);
-      const slots = Math.max(1, rects.length - 1);
-      const gap = Math.max(2, Math.min(8, (w - 8 - raw) / slots));
-      const total = raw + gap * slots;
-      let x = Math.max(2, (w - total) / 2);
-      let rowBottom = rowTop;
-      for (let i = 0; i < rects.length; i++) {
-        const it = rects[i].o.it;
-        const cx = x + widths[i] / 2;
-        it._lx = cx;
-        it._lift = 0;
-        const off = Math.abs(cx - it._sx) > 1;
-        it._sy = rowTop + it._lh + (off ? 14 : 0);
-        x += widths[i] + gap;
-        commit(it);
-        rowBottom = Math.max(rowBottom, rectOf(it).b);
-      }
-      const row = { l: 0, t: rowTop, r: w, b: rowBottom };
-      for (const o of shown) {
-        if (o.it.isTower || o.it.el.style.opacity === '0') continue;
-        const b = rectOf(o.it);
-        if (!overlap(b, row)) continue;
-        const targetTop = row.b + 8;
-        const off = Math.abs(o.it._lx - o.it._sx) > 1;
-        const y = targetTop + o.it._lh;
-        o.it._sy = off ? y + 14 + (o.it._lift || 0) : y;
-        clampItem(o.it);
-        commit(o.it);
+      towers.sort((a, b) => a.it._sx - b.it._sx);
+      const gap = 8;
+      const widths = towers.map((o) => Math.max(44, o.it._lw || 72));
+      const rowWidth = (idxs) => idxs.reduce((s, i) => s + widths[i], 0) + gap * Math.max(0, idxs.length - 1);
+      const all = towers.map((_, i) => i);
+      const rows = rowWidth(all) <= w - 16
+        ? [all]
+        : [all.slice(0, Math.ceil(all.length / 2)), all.slice(Math.ceil(all.length / 2))];
+      let y = towerRowTop || 8;
+      for (const idxs of rows) {
+        const total = rowWidth(idxs);
+        let x = Math.max(8, (w - total) / 2);
+        let rowH = 0;
+        for (const i of idxs) {
+          const it = towers[i].it;
+          it._lx = x + widths[i] / 2;
+          it._lift = 0;
+          const off = Math.abs(it._lx - it._sx) > 1;
+          it._sy = y + it._lh + (off ? 14 : 0);
+          it.el.style.opacity = '';
+          it.el.style.pointerEvents = '';
+          it.el.setAttribute('aria-hidden', 'false');
+          x += widths[i] + gap;
+          commit(it);
+          rowH = Math.max(rowH, rectOf(it).b - y);
+        }
+        y += rowH + 6;
       }
     }
     settleLabels();
@@ -800,26 +804,25 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         }
         if (!moved) break;
       }
-      const metro = shown.find((o) => o.it.el.classList.contains('metro'));
-      if (metro) {
-        metro.it.el.style.opacity = '';
-        metro.it.el.style.pointerEvents = '';
-        metro.it.el.setAttribute('aria-hidden', 'false');
-        let gapBottom = h - PAD;
-        for (const p of ui) if (p.t > topLimit + 8) gapBottom = Math.min(gapBottom, p.t - 6);
-        const box = rectOf(metro.it);
-        const covered = ui.some((p) => overlap(box, p)) || box.t < 0 || box.b > h - 2 || box.r < 8;
-        const lh = Math.max(44, box.b - box.t);
-        const placeAt = (top) => {
-          const off = Math.abs(metro.it._lx - metro.it._sx) > 1;
-          const y = top + lh;
-          metro.it._sy = off ? y + 14 + (metro.it._lift || 0) : y;
-          metro.it._lx = Math.min(w - 8 - (box.r - box.l) / 2, Math.max(8 + (box.r - box.l) / 2, w - 12 - (box.r - box.l) / 2));
-          commit(metro.it);
-        };
-        const towerBottom = Math.max(topLimit, ...shown.filter((o) => o.it.isTower).map((o) => rectOf(o.it).b));
-        if (covered && gapBottom - towerBottom >= lh) placeAt(towerBottom + 4);
-        else if (covered) placeAt(towerBottom + 4);
+    }
+    cullUiHits();
+    function cullUiHits() {
+      const hide = (it) => {
+        it.el.style.opacity = '0';
+        it.el.style.pointerEvents = 'none';
+        it.el.setAttribute('aria-hidden', 'true');
+        if (it.leader) it.leader.style.display = 'none';
+      };
+      for (const o of items) {
+        if (o.it.el.style.opacity === '0') continue;
+        if (panels.some((p) => overlap(rectOf(o.it), { l: p.l - 4, t: p.t - 4, r: p.r + 4, b: p.b + 4 }))) hide(o.it);
+      }
+      if (!precise) return;
+      for (const o of items) {
+        if (o.it.el.style.opacity === '0') continue;
+        const r = o.it.el.getBoundingClientRect();
+        const b = { l: r.left - cr.left, t: r.top - cr.top, r: r.right - cr.left, b: r.bottom - cr.top };
+        if (panels.some((p) => overlap(b, { l: p.l - 4, t: p.t - 4, r: p.r + 4, b: p.b + 4 }))) hide(o.it);
       }
     }
   }

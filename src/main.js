@@ -158,6 +158,7 @@ function showOnly(panel) {
   $('#place-card').hidden = panel !== 'place';
   if (panel !== 'explorer') $('#explorer').classList.remove('is-collapsed');
   app.classList.toggle('side-sheet', panel === 'apt' || panel === 'filters');
+  state.scene?.request();
 }
 let fromPop = false, seeded = false, pushed = 0, histDepth = 0, seedDepth = 0;
 let bootQuery = new URLSearchParams(typeof location === 'undefined' ? '' : location.search);
@@ -659,6 +660,7 @@ function showHint() {
     closed = true;
     h.hidden = true;
     localStorage.setItem('hisni-hint', '1');
+    state.scene?.request();
     document.removeEventListener('pointerdown', onDoc, true);
   };
   // Swallow the whole gesture on the strip so it cannot fall through to a tower label.
