@@ -313,7 +313,7 @@ function renderExplorer() {
   if (state.view === 'intro') { el.innerHTML = ''; return; }
   if (state.view === 'towers') {
     el.innerHTML = `<p class="eyebrow">${t('towers')}</p><h2>${t('chooseTower')}</h2><p>${t('chooseTowerHint')}</p>
-      <div class="tower-list">${state.doc.blocks.map((b) => `<button data-tower="${b.id}" class="${b.has_data ? 'has-data' : 'is-soon'}"><strong>${b.id}</strong><small>${b.has_data ? `${freeCount(b.id)} ${t('avail')}` : t('soon')}</small></button>`).join('')}</div>
+      <div class="tower-list">${state.doc.blocks.map((b) => `<button data-tower="${b.id}" class="${b.has_data ? 'has-data' : 'is-soon'}"><strong>${b.id}</strong><small>${b.has_data ? `${freeCount(b.id)}<br>${t('avail')}` : t('soon')}</small></button>`).join('')}</div>
       <p class="note">${t('labelKey')}</p>`;
   } else if (state.view === 'block') {
     const b = state.doc.blocks.find((x) => x.id === state.tower);

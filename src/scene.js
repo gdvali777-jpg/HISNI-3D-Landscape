@@ -444,6 +444,18 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         placed.push([0, top, w, bot]);
       }
     }
+    // Portrait phones pack the tower names into one row. Reserve that band so a POI
+    // label (the metro chip) is not placed underneath it.
+    let towerRowTop = 0;
+    if (w < 520) {
+      towerRowTop = 8;
+      for (const p of ui) {
+        if (p.r - p.l > w * 0.7 && p.t < h * 0.4 && p.b < h * 0.55) towerRowTop = Math.max(towerRowTop, p.b + 4);
+      }
+      const band = { l: 0, t: towerRowTop, r: w, b: towerRowTop + 52 };
+      ui.push(band);
+      placed.push([band.l, band.t, band.r, band.b]);
+    }
     // read phase
     const items = labelItems.filter((it) => !it.el.hidden && it.el.style.display !== 'none').map((it) => {
       v3.copy(it.pos).project(camera);
@@ -682,10 +694,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
       const towers = shown.filter((o) => o.it.isTower && o.it.el.style.opacity !== '0');
       if (towers.length < 2) return;
       const rects = towers.map((o) => ({ o, b: rectOf(o.it) }));
-      let rowTop = 8;
-      for (const p of ui) {
-        if (p.r - p.l > w * 0.7 && p.t < h * 0.4 && p.b < h * 0.55) rowTop = Math.max(rowTop, p.b + 4);
-      }
+      const rowTop = towerRowTop;
       rects.sort((a, c) => a.o.it._sx - c.o.it._sx);
       const widths = rects.map((x) => Math.max(44, x.b.r - x.b.l));
       const raw = widths.reduce((s, v) => s + v, 0);
@@ -693,6 +702,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
       const gap = Math.max(2, Math.min(8, (w - 8 - raw) / slots));
       const total = raw + gap * slots;
       let x = Math.max(2, (w - total) / 2);
+      let rowBottom = rowTop;
       for (let i = 0; i < rects.length; i++) {
         const it = rects[i].o.it;
         const cx = x + widths[i] / 2;
@@ -702,6 +712,19 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         it._sy = rowTop + it._lh + (off ? 14 : 0);
         x += widths[i] + gap;
         commit(it);
+        rowBottom = Math.max(rowBottom, rectOf(it).b);
+      }
+      const row = { l: 0, t: rowTop, r: w, b: rowBottom };
+      for (const o of shown) {
+        if (o.it.isTower || o.it.el.style.opacity === '0') continue;
+        const b = rectOf(o.it);
+        if (!overlap(b, row)) continue;
+        const targetTop = row.b + 8;
+        const off = Math.abs(o.it._lx - o.it._sx) > 1;
+        const y = targetTop + o.it._lh;
+        o.it._sy = off ? y + 14 + (o.it._lift || 0) : y;
+        clampItem(o.it);
+        commit(o.it);
       }
     }
   }
