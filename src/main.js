@@ -164,6 +164,7 @@ function urlForState() {
   if (state.apt) p.set('apt', state.apt);
   if (getLang() === 'en') p.set('lang', 'en');
   if (bootQuery.get('webgl') === '0') p.set('webgl', '0');
+  if (bootQuery.get('bg') === 'real') p.set('bg', 'real');
   const quality = bootQuery.get('quality'); if (quality) p.set('quality', quality);
   const light = bootQuery.get('light'); if (light) p.set('light', light);
   if (!$('#filters').hidden) p.set('filters', '1');
@@ -724,7 +725,14 @@ async function start3D(params, ctxP) {
   const needle = $('#needle');
   S.controls.addEventListener('change', () => { needle.style.transform = `rotate(${(S.controls.getAzimuthalAngle() * 180) / Math.PI}deg)`; });
   setLight(params.get('light') || 'day');
-  requestAnimationFrame(() => { $('#loading').classList.add('done'); showHint(); });
+  requestAnimationFrame(() => {
+    $('#loading').classList.add('done'); showHint();
+    if (params.get('bg') === 'real') {
+      const bar = $('#bg-switch');
+      if (bar) bar.hidden = false;
+      selectPano('1');
+    }
+  });
   // Camera follows the state parsed in boot(). fromPop keeps this from pushing another entry.
   const prevPop = fromPop; fromPop = true;
   if (state.apt) { setView('floor', { tower: state.tower, floor: state.floor, apt: state.apt }); renderCard(); }
@@ -733,4 +741,17 @@ async function start3D(params, ctxP) {
   if (params.get('filters') === '1') { showOnly('filters'); renderFilters(); }
   fromPop = prevPop;
 }
+let panoId = null;
+function selectPano(id) {
+  const prev = panoId;
+  panoId = id;
+  state.scene?.setRealView(id);
+  document.querySelectorAll('#bg-switch [data-pano]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pano === id)));
+  if (state.view === 'intro' && !state.apt && (id === 'standard' || prev === 'standard' || prev == null)) state.scene?.views.overview();
+}
+$('#bg-switch')?.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-pano]');
+  if (!b) return;
+  selectPano(b.dataset.pano);
+});
 boot();

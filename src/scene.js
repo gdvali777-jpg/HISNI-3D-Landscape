@@ -364,9 +364,29 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     night: { bg: 0x0e1322, fog: 0x0e1322, sun: 0x8fa2ff, si: 0.28, el: 40, az: 160, hemi: 0.22, hs: 0x5a6aa0, hg: 0x1a1a22, exp: 1.15, night: 1 },
   };
   let mode = 'day';
+  let realOn = false;
+  let realCam = false;
+  let sky = null;
+  let skyMat = null;
+  let panoToken = 0;
+  const layerWant = { buildings: true, vegetation: true, context: true, project: true };
+  // View 1's Mtkvari valley and the Mtatsminda ridge sit near texture u=0.62.
+  // SphereGeometry maps that column to east-northeast; this yaw swings it to world west (−X).
+  // Views 2 and 3 are the same site from a different drone heading and are tuned the same way.
+  const PANO_YAW = { 1: 2.39, 2: 3.96, 3: 2.65 };
+  function applyLayerVis() {
+    for (const name of Object.keys(layerWant)) layers[name].visible = realOn && name !== 'project' ? false : layerWant[name];
+    ground.visible = !realOn;
+  }
   function setLight(m) {
     mode = m; const p = presets[m];
-    scene.background = new THREE.Color(p.bg); scene.fog = new THREE.Fog(p.fog, m === 'golden' ? 1000 : 900, m === 'golden' ? 2600 : 2400);
+    if (!realOn) {
+      scene.background = new THREE.Color(p.bg);
+      scene.fog = new THREE.Fog(p.fog, m === 'golden' ? 1000 : 900, m === 'golden' ? 2600 : 2400);
+    } else {
+      scene.background = null;
+      scene.fog = null;
+    }
     const el = THREE.MathUtils.degToRad(p.el), az = THREE.MathUtils.degToRad(p.az);
     sun.position.set(Math.sin(az) * Math.cos(el) * 700, Math.sin(el) * 700, -Math.cos(az) * Math.cos(el) * 700); sun.target.position.set(0, 0, 0);
     sun.color.setHex(p.sun); sun.intensity = p.si; hemi.intensity = p.hemi; hemi.color.setHex(p.hs); hemi.groundColor.setHex(p.hg);
@@ -413,7 +433,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     });
     return out;
   }
-  const LABEL_AVOID = '#intro, #explorer, .sheet, .layers, .tools, .place-card, .crumbs, .header, .map-meta, footer, #hint, #toast';
+  const LABEL_AVOID = '#intro, #explorer, .sheet, .layers, .tools, .place-card, .crumbs, .header, .map-meta, footer, #hint, #toast, #bg-switch';
   const hit = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
   function updateLabels(precise) {
     const w = container.clientWidth, h = container.clientHeight;
@@ -765,7 +785,13 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     anim = { t: 0, dur, p0: camera.position.clone(), p1: pos.clone(), t0: controls.target.clone(), t1: target.clone() };
   }
   const views = {
-    overview: () => { const k = camera.aspect < 0.8 ? 1.75 : 1; flyTo(new THREE.Vector3(-330 * k, 260 * k, 420 * k), new THREE.Vector3(0, 45, 10)); },
+    overview: () => {
+      if (realCam) {
+        const k = camera.aspect < 0.8 ? 1.45 : 1;
+        flyTo(new THREE.Vector3(150 * k, 110 * k, 210 * k), new THREE.Vector3(0, 36, 0));
+      }
+      else { const k = camera.aspect < 0.8 ? 1.75 : 1; flyTo(new THREE.Vector3(-330 * k, 260 * k, 420 * k), new THREE.Vector3(0, 45, 10)); }
+    },
     towers: () => { const k = camera.aspect < 0.8 ? 1.6 : 1; flyTo(new THREE.Vector3(-150 * k, 210 * k, 260 * k), new THREE.Vector3(10, 60, 10)); },
     neighborhood: () => flyTo(new THREE.Vector3(-520, 620, 700), new THREE.Vector3(30, 0, 0)),
     map: () => flyTo(new THREE.Vector3(0.1, 980, 1), new THREE.Vector3(0, 0, 0)),
@@ -804,7 +830,51 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
 
   return {
     renderer, camera, controls, setLight, views, focusTower, focusFloor, highlightTower, buildFloor, clearFloor, recolorApts, addLabel, request,
-    setLayer(name, on) { if (name === 'labels') return; layers[name].visible = on; shadowsDirty(); request(); },
+    setLayer(name, on) { if (name === 'labels') return; layerWant[name] = on; applyLayerVis(); shadowsDirty(); request(); },
+    setRealView(id) {
+      if (id === 'standard') {
+        panoToken++;
+        realOn = false;
+        realCam = false;
+        if (sky) sky.visible = false;
+        applyLayerVis();
+        setLight(mode);
+        return;
+      }
+      const n = Number(id);
+      if (![1, 2, 3].includes(n)) return;
+      realCam = true;
+      const token = ++panoToken;
+      const size = matchMedia('(max-width: 899px), (pointer: coarse)').matches ? '2k' : '4k';
+      const root = `${import.meta.env.BASE_URL}panos/view${n}-${size}`;
+      const loader = new THREE.TextureLoader();
+      const apply = (tex) => {
+        if (token !== panoToken) { tex.dispose(); return; }
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.generateMipmaps = false;
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.anisotropy = 1;
+        if (!sky) {
+          skyMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, depthWrite: false, fog: false });
+          sky = new THREE.Mesh(new THREE.SphereGeometry(2400, 64, 40), skyMat);
+          sky.frustumCulled = false;
+          sky.renderOrder = -1;
+          scene.add(sky);
+        } else {
+          if (skyMat.map && skyMat.map !== tex) skyMat.map.dispose();
+          skyMat.map = tex;
+          sky.visible = true;
+        }
+        sky.rotation.y = PANO_YAW[n] ?? 0;
+        realOn = true;
+        scene.background = null;
+        scene.fog = null;
+        applyLayerVis();
+        request();
+      };
+      loader.load(`${root}.webp`, apply, undefined, () => loader.load(`${root}.jpg`, apply));
+    },
     zoom(f) { const d = camera.position.clone().sub(controls.target).multiplyScalar(f); if (d.length() > controls.minDistance && d.length() < controls.maxDistance) camera.position.copy(controls.target).add(d); request(); },
     nudge(dTheta, dPhi) {
       const offset = camera.position.clone().sub(controls.target);
