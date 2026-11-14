@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GroundedSkybox } from 'three/examples/jsm/objects/GroundedSkybox.js';
 
 export const FLOOR_H = 3.45;
 export const FLOORS = 36;
@@ -243,18 +244,19 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
   await step(0.55);
   // project site
   const site = ctx.site; const sitePoly = site.boundary; const podPoly = site.podium;
-  const siteMesh = new THREE.Mesh(flatShapeGeo(sitePoly, 0.12), new THREE.MeshStandardMaterial({ color: 0xc8cf9f, roughness: 1 })); siteMesh.receiveShadow = true; layers.project.add(siteMesh);
+  const projectDress = [];
+  const siteMesh = new THREE.Mesh(flatShapeGeo(sitePoly, 0.12), new THREE.MeshStandardMaterial({ color: 0xc8cf9f, roughness: 1 })); siteMesh.receiveShadow = true; layers.project.add(siteMesh); projectDress.push(siteMesh);
   const archT = archTexture(); archT.repeat.set(1 / 9, 1 / PODIUM_H);
   const podGeo = extrudeY(podPoly, 0, PODIUM_H);
   const podMats = [new THREE.MeshStandardMaterial({ color: 0xd9d4c2, roughness: 0.9 }), new THREE.MeshStandardMaterial({ map: archT, roughness: 0.8 })];
-  const podium = new THREE.Mesh(podGeo, podMats); podium.castShadow = !weak; podium.receiveShadow = true; layers.project.add(podium);
+  const podium = new THREE.Mesh(podGeo, podMats); podium.castShadow = !weak; podium.receiveShadow = true; layers.project.add(podium); projectDress.push(podium);
   // terrace greens on podium (simple patches)
   const patches = [];
   for (let i = 0; i < 26; i++) { const x = -110 + rand() * 230, z = -20 + rand() * 80; if (pointIn([x, z], podPoly)) patches.push(new THREE.CircleGeometry(3 + rand() * 5, 12).rotateX(-Math.PI / 2).translate(x, PODIUM_H + 0.05, z)); }
-  if (patches.length) layers.project.add(new THREE.Mesh(mergeGeos(patches), new THREE.MeshStandardMaterial({ color: 0x9fb06a, roughness: 1 })));
+  if (patches.length) { const pm = new THREE.Mesh(mergeGeos(patches), new THREE.MeshStandardMaterial({ color: 0x9fb06a, roughness: 1 })); layers.project.add(pm); projectDress.push(pm); }
 
   // football pitch in the yard + padel courts on the terrace (positions from the master plan)
-  const court = (x, z, w, d, rot, y, col) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: col, roughness: 0.9 })); m.position.set(x, y, z); m.rotation.y = rot; m.receiveShadow = true; layers.project.add(m); };
+  const court = (x, z, w, d, rot, y, col) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: col, roughness: 0.9 })); m.position.set(x, y, z); m.rotation.y = rot; m.receiveShadow = true; layers.project.add(m); projectDress.push(m); };
   court(-38, -47, 40, 22, THREE.MathUtils.degToRad(5), 0.2, 0x6f9a52);
   court(64, -20, 20, 10, THREE.MathUtils.degToRad(-4), PODIUM_H + 0.1, 0x4f7db0);
   court(-71, 5, 20, 10, THREE.MathUtils.degToRad(-35), PODIUM_H + 0.1, 0x4f7db0);
@@ -370,22 +372,37 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
   let skyMat = null;
   let panoToken = 0;
   const layerWant = { buildings: true, vegetation: true, context: true, project: true };
-  // View 1's Mtkvari valley and the Mtatsminda ridge sit near texture u=0.62.
-  // SphereGeometry maps that column to east-northeast; this yaw swings it to world west (−X).
-  // Views 2 and 3 are the same site from a different drone heading and are tuned the same way.
-  const PANO_YAW = { 1: 2.39, 2: 3.96, 3: 2.65 };
+  // Each drone pass has its own heading. Yaw turns the ground-projected photo so the
+  // Mtkvari / Mtatsminda ridge sits to world west. Sun azimuth is measured from view 1
+  // (bright disc near texture u=0.73, ~35° up) and shifted for the other headings.
+  // pos is the drone, a few metres off the site origin so the camera is not inside a tower.
+  const REAL_VIEWS = {
+    1: { yaw: 2.39, height: 70, pos: [6, 70, 8], look: [-72, 46, 8], fov: 60, sunEl: 35, sunAz: -129 },
+    2: { yaw: 3.96, height: 70, pos: [-14, 70, 20], look: [-92, 44, 12], fov: 60, sunEl: 32, sunAz: -100 },
+    3: { yaw: 2.65, height: 70, pos: [18, 70, -2], look: [-64, 46, -18], fov: 60, sunEl: 38, sunAz: -145 },
+  };
+  let realView = null;
+  let pmrem = null;
+  let realEnv = null;
+  let shadowGroup = null;
+  let armAfterFly = false;
   function applyLayerVis() {
     for (const name of Object.keys(layerWant)) layers[name].visible = realOn && name !== 'project' ? false : layerWant[name];
     ground.visible = !realOn;
+    if (shadowGroup) shadowGroup.visible = realOn;
+    for (const m of projectDress) m.visible = !realOn;
+    towers.forEach((tw) => { tw.bodyMat.envMapIntensity = realOn ? 0.85 : 1; });
   }
   function setLight(m) {
     mode = m; const p = presets[m];
     if (!realOn) {
       scene.background = new THREE.Color(p.bg);
       scene.fog = new THREE.Fog(p.fog, m === 'golden' ? 1000 : 900, m === 'golden' ? 2600 : 2400);
-    } else {
-      scene.background = null;
-      scene.fog = null;
+      scene.environment = null;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    } else if (realView) {
+      applyRealGrade(realView);
+      return;
     }
     const el = THREE.MathUtils.degToRad(p.el), az = THREE.MathUtils.degToRad(p.az);
     sun.position.set(Math.sin(az) * Math.cos(el) * 700, Math.sin(el) * 700, -Math.cos(az) * Math.cos(el) * 700); sun.target.position.set(0, 0, 0);
@@ -818,7 +835,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
   function loop() {
     requestAnimationFrame(loop);
     const dt = clock.getDelta();
-    if (anim) { anim.t = Math.min(1, anim.t + dt / anim.dur); const k = anim.t < 0.5 ? 4 * anim.t ** 3 : 1 - (-2 * anim.t + 2) ** 3 / 2; camera.position.lerpVectors(anim.p0, anim.p1, k); controls.target.lerpVectors(anim.t0, anim.t1, k); if (anim.t >= 1) anim = null; needs = true; labelsDirty = true; }
+    if (anim) { anim.t = Math.min(1, anim.t + dt / anim.dur); const k = anim.t < 0.5 ? 4 * anim.t ** 3 : 1 - (-2 * anim.t + 2) ** 3 / 2; camera.position.lerpVectors(anim.p0, anim.p1, k); controls.target.lerpVectors(anim.t0, anim.t1, k); if (anim.t >= 1) { anim = null; if (armAfterFly) { armAfterFly = false; armRealLimits(); } } needs = true; labelsDirty = true; }
     if (autoRotate) { controls.autoRotate = true; controls.autoRotateSpeed = 0.6; } else controls.autoRotate = false;
     const moved = controls.update(dt);
     const moving = moved || !!anim || autoRotate;
@@ -844,9 +861,9 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
   }
   const views = {
     overview: () => {
-      if (realCam) {
-        const k = camera.aspect < 0.8 ? 1.45 : 1;
-        flyTo(new THREE.Vector3(150 * k, 110 * k, 210 * k), new THREE.Vector3(0, 36, 0));
+      if (realCam && realView) {
+        flyTo(new THREE.Vector3(...realView.pos), new THREE.Vector3(...realView.look));
+        armAfterFly = true;
       }
       else { const k = camera.aspect < 0.8 ? 1.75 : 1; flyTo(new THREE.Vector3(-330 * k, 260 * k, 420 * k), new THREE.Vector3(0, 45, 10)); }
     },
@@ -855,11 +872,24 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     map: () => flyTo(new THREE.Vector3(0.1, 980, 1), new THREE.Vector3(0, 0, 0)),
   };
   function focusTower(id) {
-    const tw = towers.get(id); const p = tw.group.position; const dir = new THREE.Vector3(-0.55, 0, 1).normalize();
+    const tw = towers.get(id); const p = tw.group.position;
+    if (realCam && realView) {
+      const eye = new THREE.Vector3(...realView.pos);
+      const aim = new THREE.Vector3(p.x, 48, p.z);
+      flyTo(eye, aim, 0.8);
+      armAfterFly = true;
+      return;
+    }
+    const dir = new THREE.Vector3(-0.55, 0, 1).normalize();
     flyTo(new THREE.Vector3(p.x + dir.x * 270, 175, p.z + dir.z * 270), new THREE.Vector3(p.x, 62, p.z));
   }
   function focusFloor(id, floor) {
     const tw = towers.get(id); const p = tw.group.position; const y = (floor - 1) * FLOOR_H;
+    if (realCam && realView) {
+      flyTo(new THREE.Vector3(...realView.pos), new THREE.Vector3(p.x, y + 4, p.z), 0.8);
+      armAfterFly = true;
+      return;
+    }
     flyTo(new THREE.Vector3(p.x - 75, y + 78, p.z + 95), new THREE.Vector3(p.x, y + 4, p.z));
   }
   let highlighted = null;
@@ -881,11 +911,79 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
   let hoverT = 0;
   renderer.domElement.addEventListener('pointermove', (e) => { if (e.pointerType !== 'mouse' || e.buttons) return; const now = performance.now(); if (now - hoverT < 60) return; hoverT = now; const h = pick(e); renderer.domElement.style.cursor = h ? 'pointer' : ''; onHover?.(h, e); });
 
-  function frame() { const w = container.clientWidth, h = container.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; if (w < 820) camera.setViewOffset(w, h, 0, h * 0.17, w, h); else camera.clearViewOffset(); camera.updateProjectionMatrix(); request(); }
+  function frame() { const w = container.clientWidth, h = container.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; if (w < 820 && !realCam) camera.setViewOffset(w, h, 0, h * 0.17, w, h); else camera.clearViewOffset(); camera.updateProjectionMatrix(); request(); }
   frame();
   const ro = new ResizeObserver(frame);
   ro.observe(container);
 
+  function applyRealGrade(view) {
+    const el = THREE.MathUtils.degToRad(view.sunEl), az = THREE.MathUtils.degToRad(view.sunAz);
+    sun.position.set(Math.sin(az) * Math.cos(el) * 700, Math.sin(el) * 700, -Math.cos(az) * Math.cos(el) * 700);
+    sun.target.position.set(0, 0, 0);
+    sun.color.setHex(0xfff1d0);
+    sun.intensity = 2.7;
+    hemi.intensity = 0.45;
+    hemi.color.setHex(0xfff4e4);
+    hemi.groundColor.setHex(0x8d7964);
+    renderer.toneMapping = THREE.AgXToneMapping;
+    renderer.toneMappingExposure = 1.06;
+    scene.background = null;
+    scene.fog = new THREE.FogExp2(0xb9c6ce, 0.00115);
+    shadowsDirty();
+    request();
+  }
+  function setRealEnv(tex) {
+    if (!pmrem) pmrem = new THREE.PMREMGenerator(renderer);
+    const env = pmrem.fromEquirectangular(tex).texture;
+    if (realEnv) realEnv.dispose();
+    realEnv = env;
+    scene.environment = env;
+  }
+  function ensureContactShadows() {
+    if (shadowGroup) return;
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d');
+    const grd = g.createRadialGradient(64, 64, 6, 64, 64, 64);
+    grd.addColorStop(0, 'rgba(0,0,0,0.72)');
+    grd.addColorStop(0.42, 'rgba(0,0,0,0.34)');
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+    const map = new THREE.CanvasTexture(c);
+    shadowGroup = new THREE.Group();
+    for (const [, tw] of towers) {
+      const T = tw.T;
+      const rad = (T.a || T.w / 2) + 16;
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(rad, 40), new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, color: 0x000000, toneMapped: false }));
+      disc.rotation.x = -Math.PI / 2;
+      disc.position.set(T.x, 0.35, T.z);
+      disc.renderOrder = 2;
+      shadowGroup.add(disc);
+    }
+    scene.add(shadowGroup);
+  }
+  function armRealLimits() {
+    const offset = camera.position.clone().sub(controls.target);
+    const sph = new THREE.Spherical().setFromVector3(offset);
+    controls.minDistance = Math.max(18, sph.radius * 0.82);
+    controls.maxDistance = sph.radius * 1.22;
+    controls.minPolarAngle = Math.max(0.25, sph.phi - 0.26);
+    controls.maxPolarAngle = Math.min(1.35, sph.phi + 0.2);
+    controls.minAzimuthAngle = sph.theta - 0.65;
+    controls.maxAzimuthAngle = sph.theta + 0.65;
+  }
+  function restoreRealCamera() {
+    controls.minDistance = 40;
+    controls.maxDistance = 1100;
+    controls.minPolarAngle = 0.05;
+    controls.maxPolarAngle = Math.PI * 0.47;
+    controls.minAzimuthAngle = -Infinity;
+    controls.maxAzimuthAngle = Infinity;
+    camera.fov = 38;
+    camera.updateProjectionMatrix();
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    if (realEnv) { realEnv.dispose(); realEnv = null; }
+    scene.environment = null;
+  }
   return {
     renderer, camera, controls, setLight, views, focusTower, focusFloor, highlightTower, buildFloor, clearFloor, recolorApts, addLabel, request,
     setLayer(name, on) { if (name === 'labels') return; layerWant[name] = on; applyLayerVis(); shadowsDirty(); request(); },
@@ -894,44 +992,76 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         panoToken++;
         realOn = false;
         realCam = false;
+        realView = null;
+        armAfterFly = false;
         if (sky) sky.visible = false;
+        restoreRealCamera();
         applyLayerVis();
         setLight(mode);
         return;
       }
       const n = Number(id);
-      if (![1, 2, 3].includes(n)) return;
+      const view = REAL_VIEWS[n];
+      if (!view) return;
       realCam = true;
+      realView = view;
+      flyTo(new THREE.Vector3(...view.pos), new THREE.Vector3(...view.look));
+      armAfterFly = true;
+      camera.fov = view.fov;
+      camera.updateProjectionMatrix();
       const token = ++panoToken;
-      const size = matchMedia('(max-width: 899px), (pointer: coarse)').matches ? '2k' : '4k';
-      const root = `${import.meta.env.BASE_URL}panos/view${n}-${size}`;
+      const maxTex = renderer.capabilities.maxTextureSize || 4096;
+      const coarse = matchMedia('(pointer: coarse), (max-width: 899px)').matches;
+      const hi = coarse ? (maxTex >= 4096 ? '4k' : '2k') : (maxTex >= 8192 ? '8k' : '4k');
+      const root = `${import.meta.env.BASE_URL}panos/view${n}-`;
       const loader = new THREE.TextureLoader();
-      const apply = (tex) => {
-        if (token !== panoToken) { tex.dispose(); return; }
+      const prep = (tex) => {
         tex.colorSpace = THREE.SRGBColorSpace;
-        tex.generateMipmaps = false;
-        tex.minFilter = THREE.LinearFilter;
+        tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+        tex.generateMipmaps = true;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
         tex.magFilter = THREE.LinearFilter;
-        tex.anisotropy = 1;
+        return tex;
+      };
+      const mount = (tex, { env = false } = {}) => {
+        if (token !== panoToken) { tex.dispose(); return; }
+        prep(tex);
         if (!sky) {
-          skyMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, depthWrite: false, fog: false });
-          sky = new THREE.Mesh(new THREE.SphereGeometry(2400, 64, 40), skyMat);
+          const res = coarse ? 40 : 72;
+          sky = new GroundedSkybox(tex, view.height, 1600, res);
+          sky.material.fog = false;
+          sky.material.depthWrite = false;
           sky.frustumCulled = false;
           sky.renderOrder = -1;
+          sky.raycast = () => {};
           scene.add(sky);
-        } else {
-          if (skyMat.map && skyMat.map !== tex) skyMat.map.dispose();
-          skyMat.map = tex;
-          sky.visible = true;
+          ensureContactShadows();
+        } else if (sky.material.map && sky.material.map !== tex) {
+          sky.material.map.dispose();
+          sky.material.map = tex;
         }
-        sky.rotation.y = PANO_YAW[n] ?? 0;
+        sky.position.y = view.height;
+        sky.rotation.y = view.yaw;
+        sky.visible = true;
+        if (env) setRealEnv(tex);
         realOn = true;
         scene.background = null;
-        scene.fog = null;
+        applyRealGrade(view);
         applyLayerVis();
+        camera.fov = view.fov;
+        camera.updateProjectionMatrix();
         request();
       };
-      loader.load(`${root}.webp`, apply, undefined, () => loader.load(`${root}.jpg`, apply));
+      const load = (size) => new Promise((resolve, reject) => {
+        loader.load(`${root}${size}.webp`, resolve, undefined, () => {
+          loader.load(`${root}${size}.jpg`, resolve, undefined, reject);
+        });
+      });
+      load('2k').then((tex) => {
+        mount(tex, { env: true });
+        if (hi === '2k') return null;
+        return load(hi).then((big) => mount(big));
+      }).catch(() => {});
     },
     zoom(f) { const d = camera.position.clone().sub(controls.target).multiplyScalar(f); if (d.length() > controls.minDistance && d.length() < controls.maxDistance) camera.position.copy(controls.target).add(d); request(); },
     nudge(dTheta, dPhi) {
