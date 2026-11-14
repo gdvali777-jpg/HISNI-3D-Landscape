@@ -395,28 +395,45 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     // read phase
     const items = labelItems.filter((it) => !it.el.hidden && it.el.style.display !== 'none').map((it) => {
       v3.copy(it.pos).project(camera);
-      return { it, vis: v3.z < 1 && Math.abs(v3.x) < 1.05 && Math.abs(v3.y) < 1.05, sx: (v3.x * 0.5 + 0.5) * w, sy: (-v3.y * 0.5 + 0.5) * h, lw: it.el.offsetWidth, lh: (it.el.firstElementChild?.offsetHeight || 30) };
+      const sx = (v3.x * 0.5 + 0.5) * w, sy = (-v3.y * 0.5 + 0.5) * h;
+      const onScreen = v3.z < 1 && Math.abs(v3.x) < 1.05 && Math.abs(v3.y) < 1.05;
+      const near = v3.z < 1 && Math.abs(v3.x) < 1.8 && Math.abs(v3.y) < 1.8;
+      return { it, vis: onScreen || (near && it.priority < 13), sx, sy, lw: it.el.offsetWidth, lh: (it.el.firstElementChild?.offsetHeight || 30) };
     }).filter((o) => { if (o.lw > 0) return true; if (o.it.leader) o.it.leader.style.display = 'none'; return false; });
     // write phase: try positions above the anchor, then beside the blocking tower (leader line)
     for (const o of items) {
       const { it } = o; let lx = o.sx, lift = 0, show = o.vis;
+      const PAD = 12;
       const rectAt = (x, d) => [x - o.lw / 2 - 4, o.sy - 14 - d - o.lh - 4, x + o.lw / 2 + 4, o.sy - 14 - d + 4];
-      const free = (r) => r[1] > 58 && r[0] > 4 && r[2] < w - 4 && r[3] < h - 8 && !placed.some((p) => hit(r, p)) && !tRects.some((t) => hit(r, t));
+      const clampX = (x) => Math.min(w - PAD - o.lw / 2 - 4, Math.max(PAD + o.lw / 2 + 4, x));
+      const inside = (r) => r[1] >= PAD && r[0] >= PAD && r[2] <= w - PAD && r[3] <= h - PAD;
+      const clearOf = (r, avoidTowers) => inside(r) && !placed.some((p) => hit(r, p)) && (!avoidTowers || !tRects.some((t) => hit(r, t)));
       if (show) {
-        if (it.isTower) placed.push(rectAt(o.sx, 0));
-        else {
+        if (it.isTower) {
+          let found = false;
+          search: for (const d of [0, 32, 64, 96]) {
+            for (const s of [0, 1, -1, 2, -2, 3, -3]) {
+              const x = clampX(o.sx + s * (o.lw * 0.72 + 8));
+              const r = rectAt(x, d);
+              if (clearOf(r, false)) { lx = x; lift = d; placed.push(r); found = true; break search; }
+            }
+          }
+          if (!found) { lx = clampX(o.sx); lift = 0; show = true; placed.push(rectAt(lx, 0)); }
+          else show = true;
+        } else {
           const cands = [];
           for (const d of [0, 36, 72]) {
-            cands.push([o.sx, d]);
-            for (const t of tRects) { cands.push([t[0] - o.lw / 2 - 10, d]); cands.push([t[2] + o.lw / 2 + 10, d]); }
+            cands.push([clampX(o.sx), d]);
+            for (const t of tRects) { cands.push([clampX(t[0] - o.lw / 2 - 10), d]); cands.push([clampX(t[2] + o.lw / 2 + 10), d]); }
           }
           cands.sort((p, q) => (Math.abs(p[0] - o.sx) + p[1] * 1.5) - (Math.abs(q[0] - o.sx) + q[1] * 1.5));
           show = false;
-          for (const [x, d] of cands) { if (Math.abs(x - o.sx) > 280) continue; const r = rectAt(x, d); if (free(r)) { lx = x; lift = d; show = true; placed.push(r); break; } }
-          // narrow screens: key POIs (metro, school, bus) may sit over a tower if there is no free spot, never over another label or panel
-          if (!show && w < 820 && it.priority < 13) { const r = rectAt(o.sx, 0); if (r[1] > 58 && !placed.some((p) => hit(r, p))) { show = true; placed.push(r); } }
+          for (const [x, d] of cands) { if (Math.abs(x - o.sx) > 280) continue; const r = rectAt(x, d); if (clearOf(r, true)) { lx = x; lift = d; show = true; placed.push(r); break; } }
+          // Last resort stays inside the viewport and off other labels, even if it sits over a tower.
+          if (!show && it.priority < 13) { lx = clampX(o.sx); show = true; placed.push(rectAt(lx, 0)); }
         }
       }
+      it._sx = o.sx; it._lx = lx; it._sy = o.sy; it._lift = lift;
       const off = Math.abs(lx - o.sx) > 1;
       it.el.style.setProperty('--stem', off ? '0px' : `${14 + lift}px`);
       it.el.style.transform = off ? `translate(-50%,-100%) translate(${lx}px,${o.sy - 14 - lift}px)` : `translate(-50%,-100%) translate(${o.sx}px,${o.sy}px)`;
@@ -428,6 +445,87 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         const x1 = lx, y1 = o.sy - 14 - lift; const dx = x1 - o.sx, dy = y1 - o.sy; const len = Math.hypot(dx, dy);
         Object.assign(it.leader.style, { display: 'block', width: `${len}px`, transform: `translate(${o.sx}px,${o.sy}px) rotate(${Math.atan2(dy, dx)}rad)` });
       } else it.leader.style.display = 'none';
+    }
+    const PAD = 12;
+    const boxOf = (el) => {
+      const r = el.getBoundingClientRect();
+      return { l: r.left - cr.left, t: r.top - cr.top, r: r.right - cr.left, b: r.bottom - cr.top };
+    };
+    const reapply = (it) => {
+      const off = Math.abs(it._lx - it._sx) > 1;
+      const y = off ? it._sy - 14 - it._lift : it._sy;
+      it.el.style.setProperty('--stem', off ? '0px' : `${14 + it._lift}px`);
+      it.el.style.transform = `translate(-50%,-100%) translate(${it._lx}px,${y}px)`;
+      it.el.classList.toggle('offset', off);
+    };
+    const shown = () => items.filter((o) => o.it.el.style.opacity !== '0');
+    const fitsX = (it, x, b) => {
+      const half = (b.r - b.l) / 2;
+      return x - half >= PAD && x + half <= w - PAD;
+    };
+    for (let pass = 0; pass < 24; pass++) {
+      let changed = false;
+      const list = shown();
+      for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) {
+          const A = boxOf(list[i].it.el), B = boxOf(list[j].it.el);
+          const iw = Math.min(A.r, B.r) - Math.max(A.l, B.l);
+          const ih = Math.min(A.b, B.b) - Math.max(A.t, B.t);
+          if (iw <= 1 || ih <= 1) continue;
+          const moveJ = list[j].it.priority >= list[i].it.priority;
+          const mover = moveJ ? list[j] : list[i];
+          const other = moveJ ? A : B;
+          const mine = moveJ ? B : A;
+          const dir = (mine.l + mine.r) / 2 >= (other.l + other.r) / 2 ? 1 : -1;
+          const nextX = mover.it._lx + dir * (iw + 10);
+          const otherDir = -dir;
+          const otherIt = moveJ ? list[i].it : list[j].it;
+          const otherBox = moveJ ? A : B;
+          const otherNext = otherIt._lx + otherDir * (iw + 10);
+          if (iw <= ih && fitsX(mover.it, nextX, mine)) mover.it._lx = nextX;
+          else if (fitsX(otherIt, otherNext, otherBox)) otherIt._lx = otherNext;
+          else mover.it._sy -= ih + 14;
+          reapply(mover.it); reapply(otherIt);
+          changed = true;
+        }
+      }
+      for (const o of shown()) {
+        const b = boxOf(o.it.el);
+        let dx = 0, dy = 0;
+        if (b.l < PAD) dx = PAD - b.l;
+        else if (b.r > w - PAD) dx = (w - PAD) - b.r;
+        if (b.t < PAD) dy = PAD - b.t;
+        else if (b.b > h - PAD) dy = (h - PAD) - b.b;
+        if (dx || dy) { o.it._lx += dx; o.it._sy += dy; reapply(o.it); changed = true; }
+      }
+      if (!changed) break;
+    }
+    const towersOnScreen = () => shown().filter((o) => o.it.isTower).sort((a, b) => boxOf(a.it.el).l - boxOf(b.it.el).l);
+    for (let pass = 0; pass < 8; pass++) {
+      const towers = towersOnScreen();
+      let changed = false;
+      for (let i = 1; i < towers.length; i++) {
+        const A = boxOf(towers[i - 1].it.el), B = boxOf(towers[i].it.el);
+        const iw = Math.min(A.r, B.r) - Math.max(A.l, B.l);
+        const ih = Math.min(A.b, B.b) - Math.max(A.t, B.t);
+        if (iw <= 1 || ih <= 1) continue;
+        const need = iw + 8;
+        if (B.r + need <= w - PAD) towers[i].it._lx += need;
+        else if (A.l - need >= PAD) towers[i - 1].it._lx -= need;
+        else towers[i].it._sy -= (B.b - B.t) + 8;
+        reapply(towers[i].it); reapply(towers[i - 1].it);
+        changed = true;
+      }
+      if (!changed) break;
+    }
+    for (const o of shown()) {
+      const b = boxOf(o.it.el);
+      let dx = 0, dy = 0;
+      if (b.l < PAD) dx = PAD - b.l;
+      else if (b.r > w - PAD) dx = (w - PAD) - b.r;
+      if (b.t < PAD) dy = PAD - b.t;
+      else if (b.b > h - PAD) dy = (h - PAD) - b.b;
+      if (dx || dy) { o.it._lx += dx; o.it._sy += dy; reapply(o.it); }
     }
   }
 

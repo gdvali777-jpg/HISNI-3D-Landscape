@@ -82,11 +82,18 @@ function announce(msg) { $('#announce').textContent = msg; }
 const towerName = (id) => `${t('block')} ${id}`;
 
 // ---------- explorer ----------
+function basePanel() { return state.view === 'intro' ? 'intro' : 'explorer'; }
+function showOnly(panel) {
+  $('#intro').hidden = panel !== 'intro';
+  $('#explorer').hidden = panel !== 'explorer';
+  $('#filters').hidden = panel !== 'filters';
+  $('#apt-card').hidden = panel !== 'apt';
+  $('#place-card').hidden = panel !== 'place';
+  if (panel !== 'explorer') $('#explorer').classList.remove('is-collapsed');
+}
 function setView(v, opts = {}) {
   expandSheet();
   Object.assign(state, { view: v }, opts);
-  $('#intro').hidden = v !== 'intro';
-  $('#place-card').hidden = true;
   const S = state.scene;
   if (S) {
     if (v === 'intro') { S.clearFloor(); S.highlightTower(null); S.views.overview(); }
@@ -94,7 +101,8 @@ function setView(v, opts = {}) {
     if (v === 'block') { S.clearFloor(); S.highlightTower(state.tower); S.focusTower(state.tower); }
     if (v === 'floor') { S.highlightTower(null); S.buildFloor(state.tower, state.floor, floorApts(), (a) => statusColorHex[a.status] ?? 0x999999); recolor(); S.focusFloor(state.tower, state.floor); }
   }
-  if (v !== 'floor') { state.apt = null; $('#apt-card').hidden = true; }
+  if (v !== 'floor') state.apt = null;
+  showOnly(v === 'intro' ? 'intro' : 'explorer');
   renderCrumbs(); renderExplorer();
 }
 const floorApts = () => state.doc.apartments.filter((a) => a.block === state.tower && a.floor === state.floor);
@@ -140,8 +148,7 @@ function toggleStatus(s) {
 
 function renderExplorer() {
   const el = $('#explorer-body'); if (!state.doc || !el) return;
-  $('#explorer').hidden = state.view === 'intro';
-  if ($('#explorer').hidden) return;
+  if (state.view === 'intro') { el.innerHTML = ''; return; }
   if (state.view === 'towers') {
     el.innerHTML = `<p class="eyebrow">${t('towers')}</p><h2>${t('chooseTower')}</h2><p>${t('chooseTowerHint')}</p>
       <div class="tower-list">${state.doc.blocks.map((b) => `<button data-tower="${b.id}" class="${b.has_data ? 'has-data' : ''}"><strong>${b.id}</strong><small>${b.floors} ${t('floorsN')}</small></button>`).join('')}</div>
@@ -186,12 +193,12 @@ function collapseSheet() {
   $('#explorer-handle')?.setAttribute('aria-label', t('sheetExpand'));
 }
 function stepBack() {
-  if (!$('#apt-card').hidden) { state.apt = null; renderCard(); renderExplorer(); recolor(); expandSheet(); return; }
-  if (!$('#filters').hidden) { $('#filters').hidden = true; return; }
+  if (!$('#apt-card').hidden) { state.apt = null; renderCard(); renderExplorer(); recolor(); return; }
+  if (!$('#filters').hidden || !$('#place-card').hidden) { showOnly(basePanel()); return; }
   if (state.view === 'floor') setView('block');
   else if (state.view === 'block') setView('towers', { tower: null });
   else if (state.view === 'towers') setView('intro', { tower: null });
-  else expandSheet();
+  else showOnly('intro');
 }
 $('#explorer-close').addEventListener('click', (e) => { e.stopPropagation(); stepBack(); });
 // Swipe the grip to collapse; a tap (no travel) toggles. pointer events fire on iOS touch.
@@ -226,8 +233,8 @@ function selectApt(id, { fromList } = {}) {
 
 function renderCard() {
   const el = $('#apt-card'); const a = state.apt && aptById(state.apt);
-  if (!a) { el.hidden = true; return; }
-  el.hidden = false; $('#filters').hidden = true;
+  if (!a) { if (!$('#apt-card').hidden) showOnly(basePanel()); return; }
+  showOnly('apt');
   const ty = a.type; const tab = !ty.plan_2d ? '3d' : !ty.plan_3d ? '2d' : state.planTab; const img = tab === '3d' ? ty.plan_3d : ty.plan_2d; const src = /^https?:/.test(img) ? img : BASE + img;
   el.innerHTML = `<div class="sheet-head"><div><p class="eyebrow">${towerName(a.block)} · ${t('floor')} ${a.floor}</p><h2>${t('apartment')} № ${a.number}</h2></div><button class="x" data-close aria-label="${t('close')}">×</button></div>
     <div class="tabs" role="group">${ty.plan_2d ? `<button data-tab="2d" aria-pressed="${tab === '2d'}">${t('plan2d')}</button>` : ''}${ty.plan_3d ? `<button data-tab="3d" aria-pressed="${tab === '3d'}">${t('plan3d')}</button>` : ''}</div>
@@ -277,10 +284,13 @@ let fT;
 $('#filters').addEventListener('input', () => { clearTimeout(fT); fT = setTimeout(() => { readFilters(); const foc = document.activeElement?.name; renderFilters(); if (foc) $(`#filters [name="${foc}"]`)?.focus(); renderExplorer(); recolor(); }, 250); });
 $('#filters').addEventListener('click', (e) => {
   if (e.target.closest('[data-reset]')) { state.filters = defaultFilters(); renderFilters(); renderExplorer(); recolor(); return; }
-  if (e.target.closest('[data-close]')) { $('#filters').hidden = true; if (state.view === 'intro') setView('towers'); return; }
-  const ab = e.target.closest('[data-apt]'); if (ab) { $('#filters').hidden = true; selectApt(ab.dataset.apt); }
+  if (e.target.closest('[data-close]')) { showOnly(basePanel()); return; }
+  const ab = e.target.closest('[data-apt]'); if (ab) { showOnly(basePanel()); selectApt(ab.dataset.apt); }
 });
-$('#filter-open').addEventListener('click', () => { const el = $('#filters'); el.hidden = !el.hidden; if (!el.hidden) { $('#apt-card').hidden = true; renderFilters(); el.querySelector('input')?.focus(); } });
+$('#filter-open').addEventListener('click', () => {
+  if ($('#filters').hidden) { showOnly('filters'); renderFilters(); $('#filters input')?.focus(); }
+  else showOnly(basePanel());
+});
 
 // ---------- lead form (stub) ----------
 function openLead(id) {
@@ -341,7 +351,8 @@ function makeLabels(S) {
 function showPlace(p) {
   const el = $('#place-card'); const L = getLang();
   el.innerHTML = `<div class="sheet-head"><div><p class="eyebrow">${t('poiCat')[p.cat]}</p><h3>${esc(p[L])}</h3><p>${p.min} ${t('walk')}${p.src === 'client' ? '' : ' (' + t('approx') + ')'}</p></div><button class="x" aria-label="${t('close')}">×</button></div>`;
-  el.hidden = false; el.querySelector('.x').onclick = () => (el.hidden = true);
+  showOnly('place');
+  el.querySelector('.x').onclick = () => showOnly(basePanel());
 }
 
 // ---------- controls ----------
@@ -355,24 +366,22 @@ $('#zoom-out').addEventListener('click', () => state.scene?.zoom(1.25));
 $('#rotate').addEventListener('click', (e) => { const on = state.scene?.toggleRotate(); e.currentTarget.setAttribute('aria-pressed', String(!!on)); });
 function goHome() {
   state.apt = null;
-  $('#apt-card').hidden = true;
-  $('#filters').hidden = true;
-  $('#place-card').hidden = true;
   setView('intro', { tower: null, floor: null });
 }
-// iOS Safari sometimes delivers pointerup without a click when another layer is near the button.
 let homeAt = 0;
-function onHome() {
+function onHome(e) {
+  e?.preventDefault?.();
   const now = performance.now();
-  if (now - homeAt < 450) return;
+  if (now - homeAt < 400) return;
   homeAt = now;
   goHome();
 }
 $('#reset').addEventListener('click', onHome);
-$('#reset').addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse' && e.button !== 0) return; onHome(); });
+$('#reset').addEventListener('touchend', onHome, { passive: false });
+$('#reset').addEventListener('pointerup', (e) => { if (e.pointerType === 'touch') return; onHome(e); });
 document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, dialog')) return;
-  if (e.key === 'Escape') { if (!$('#apt-card').hidden) { state.apt = null; renderCard(); recolor(); } else if (!$('#filters').hidden) $('#filters').hidden = true; else if (state.view === 'floor') setView('block'); else if (state.view === 'block') setView('towers', { tower: null }); else if (state.view === 'towers') setView('intro'); }
+  if (e.key === 'Escape') { if (!$('#apt-card').hidden) { state.apt = null; renderCard(); recolor(); } else if (!$('#filters').hidden || !$('#place-card').hidden) showOnly(basePanel()); else if (state.view === 'floor') setView('block'); else if (state.view === 'block') setView('towers', { tower: null }); else if (state.view === 'towers') setView('intro'); }
   if (e.key === 'Home') $('#reset').click();
   if (e.key === '+' || e.key === '=') state.scene?.zoom(0.8);
   if (e.key === '-') state.scene?.zoom(1.25);
@@ -401,7 +410,7 @@ async function boot() {
 }
 function startFallback() {
     app.classList.add('fallback'); $('#loading').classList.add('done');
-    state.view = 'block'; state.tower = 'III'; $('#intro').hidden = true; renderCrumbs(); renderExplorer();
+    state.view = 'block'; state.tower = 'III'; showOnly('explorer'); renderCrumbs(); renderExplorer();
     $('#explorer-body').insertAdjacentHTML('afterbegin', `<p class="placeholder">${t('webglOff')}</p><img class="fallback-plan" src="${BASE}plans/block3-typical-floor.webp" alt="${t('typeL')}" width="600" height="760"/>`);
 }
 async function start3D(params, ctxP) {
