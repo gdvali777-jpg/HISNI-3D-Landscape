@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ka">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1c1322" />
+  <meta name="description" content="Hisni by Biograpi Living — interactive 3D view of the complex and its Isani neighbourhood, Tbilisi." />
+  <title>ჰისნი · Hisni by Biograpi — 3D</title>
+  <link rel="icon" href="./brand/favicon.svg" type="image/svg+xml" />
+  <link rel="preload" href="./fonts/pingl-400.woff2" as="font" type="font/woff2" crossorigin />
+</head>
+<body>
+<main id="app">
+  <div id="viewport" role="region" tabindex="0" aria-label="3D view. Drag to orbit, scroll or pinch to zoom."></div>
+  <div id="labels"></div>
+
+  <header class="header">
+    <a class="brand" href="https://biograpi.ge/" target="_blank" rel="noopener"><img src="./brand/hisni-dark.webp" alt="Hisni by Biograpi" width="150" height="43" /></a>
+    <div class="header-right">
+      <button id="filter-open" class="chip" data-i18n="filters"></button>
+      <button id="about-open" class="chip ghost" data-i18n="about"></button>
+      <button id="lang" class="chip lang" aria-label="Language"></button>
+    </div>
+  </header>
+
+  <section id="intro" class="intro panel">
+    <p class="eyebrow" data-i18n="eyebrow"></p>
+    <h1><span data-i18n="title"></span> <em data-i18n="titleSub"></em></h1>
+    <p class="intro-copy" data-i18n="introCopy"></p>
+    <div class="stats">
+      <div><strong>4</strong><small data-i18n="statTowers"></small></div>
+      <div><strong>36</strong><small data-i18n="statFloors"></small></div>
+      <div><strong>40,000<sup>*</sup></strong><small data-i18n="statMall"></small></div>
+      <div><strong>8,000<sup>*</sup></strong><small data-i18n="statGreen"></small></div>
+    </div>
+    <p class="stat-src">* <span data-i18n="statSrc"></span></p>
+    <button id="start" class="primary" data-i18n="explore"></button>
+  </section>
+
+  <nav id="crumbs" class="crumbs" hidden aria-label="Explorer"></nav>
+  <aside id="explorer" class="explorer panel" hidden aria-live="polite"></aside>
+  <aside id="apt-card" class="apt-card panel sheet" hidden aria-live="polite"></aside>
+  <aside id="filters" class="filters panel sheet" hidden aria-label="Filters"></aside>
+  <aside id="place-card" class="place-card panel" hidden></aside>
+
+  <aside class="layers panel" id="layers">
+    <button id="layers-toggle" class="panel-heading" aria-expanded="false" aria-controls="layer-options"><span data-i18n="layers"></span><span class="chev">+</span></button>
+    <div id="layer-options" hidden>
+      <label><input type="checkbox" data-layer="buildings" checked /> <span data-i18n="lBuildings"></span></label>
+      <label><input type="checkbox" data-layer="vegetation" checked /> <span data-i18n="lTrees"></span></label>
+      <label><input type="checkbox" data-layer="labels" checked /> <span data-i18n="lLabels"></span></label>
+    </div>
+    <div class="light" role="group" aria-label="Light">
+      <button data-light="day" class="active" aria-pressed="true" data-i18n="day"></button>
+      <button data-light="golden" aria-pressed="false" data-i18n="golden"></button>
+      <button data-light="night" aria-pressed="false" data-i18n="night"></button>
+    </div>
+  </aside>
+
+  <nav class="tools panel" aria-label="Camera">
+    <button id="zoom-in" data-i18n-aria="zoomIn">+</button>
+    <button id="zoom-out" data-i18n-aria="zoomOut">−</button>
+    <button id="rotate" data-i18n-aria="rotate" aria-pressed="false">⟳</button>
+    <button id="reset" data-i18n-aria="resetView">⌂</button>
+  </nav>
+
+  <div class="map-meta"><div class="north" aria-hidden="true"><span>N</span><svg id="needle" viewBox="0 0 40 40"><path d="m20 4 8 27-8-6-8 6Z" fill="currentColor"/></svg></div></div>
+
+  <footer><span data-i18n="attribution"></span> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a></footer>
+
+  <div id="hint" class="hint" hidden><p data-i18n="hint"></p><button id="hint-ok" class="primary small" data-i18n="hintOk"></button></div>
+  <div id="loading" class="mini" role="status"><img src="./brand/hisni-dark.webp" alt="" width="180" height="51" /><p data-i18n="loading"></p><div class="bar"><i></i></div></div>
+  <div id="announce" class="sr-only" aria-live="polite"></div>
+
+  <dialog id="about"></dialog>
+  <dialog id="lead"></dialog>
+</main>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
