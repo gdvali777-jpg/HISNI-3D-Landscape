@@ -413,7 +413,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     });
     return out;
   }
-  const LABEL_AVOID = '#intro, #explorer, .sheet, .layers, .tools, .place-card, .crumbs, .header, .map-meta, footer';
+  const LABEL_AVOID = '#intro, #explorer, .sheet, .layers, .tools, .place-card, .crumbs, .header, .map-meta, footer, #hint, #toast';
   const hit = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
   function updateLabels(precise) {
     const w = container.clientWidth, h = container.clientHeight;
@@ -432,6 +432,17 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
       const hb = header.getBoundingClientRect().bottom - cr.top + 8;
       ui.push({ l: 0, t: 0, r: w, b: hb });
       placed.push([0, 0, w, hb]);
+    }
+    // A wide breadcrumb row leaves gaps between chips. Fill the whole band so a tower label
+    // cannot sit in one of those gaps, under the crumbs.
+    const crumbs = document.querySelector('#crumbs');
+    if (crumbs && !crumbs.hidden && crumbs.offsetParent !== null) {
+      const r = crumbs.getBoundingClientRect();
+      if (r.width > w * 0.55 && r.height > 2) {
+        const top = r.top - cr.top, bot = r.bottom - cr.top + 10;
+        ui.push({ l: 0, t: top, r: w, b: bot });
+        placed.push([0, top, w, bot]);
+      }
     }
     // read phase
     const items = labelItems.filter((it) => !it.el.hidden && it.el.style.display !== 'none').map((it) => {
@@ -542,7 +553,21 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
             const towers = mover.isTower && stay.isTower;
             if (towers) {
               const dir = (mine.l + mine.r) >= (other.l + other.r) ? 1 : -1;
+              const prevLx = mover._lx;
+              const prevSy = mover._sy;
               mover._lx += dir * (o.iw + 8);
+              clampItem(mover);
+              if (overlap(rectOf(mover), rectOf(stay))) {
+                mover._lx = prevLx;
+                const vdir = (mine.t + mine.b) >= (other.t + other.b) ? 1 : -1;
+                mover._sy += vdir * (o.ih + 12);
+                clampItem(mover);
+                const nb = rectOf(mover);
+                if (overlap(nb, rectOf(stay)) || nb.t < PAD || nb.b > h - PAD) {
+                  mover._lx = prevLx;
+                  mover._sy = prevSy;
+                }
+              }
             } else {
               const below = (mine.t + mine.b) >= (other.t + other.b);
               const prevSy = mover._sy;
@@ -624,7 +649,18 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
               else { mover.it.el.style.opacity = '0'; mover.it.el.style.pointerEvents = 'none'; if (mover.it.leader) mover.it.leader.style.display = 'none'; }
               acted = true;
             }
-            else if (!placedOk && mover.it.isTower && other.it.isTower) { mover.it._lx += (mover.l >= other.l ? 1 : -1) * (o.iw + 6); commit(mover.it); acted = true; }
+            else if (!placedOk && mover.it.isTower && other.it.isTower) {
+              const sign = mover.t >= other.t ? 1 : -1;
+              let dy = sign * (o.ih + 12);
+              const next = { l: mover.l, t: mover.t + dy, r: mover.r, b: mover.b + dy };
+              if (next.t < PAD || next.b > h - PAD) dy = -dy;
+              const alt = { l: mover.l, t: mover.t + dy, r: mover.r, b: mover.b + dy };
+              if (alt.t >= PAD && alt.b <= h - PAD) {
+                mover.it._sy += dy;
+                commit(mover.it);
+              }
+              acted = true;
+            }
             break pair;
           }
         }
@@ -638,6 +674,34 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
           b.it._lx += dx; b.it._sy += dy; commit(b.it); acted = true; break;
         }
         if (!acted) break;
+      }
+    }
+    packPhoneTowers();
+    function packPhoneTowers() {
+      if (w >= 520) return;
+      const towers = shown.filter((o) => o.it.isTower && o.it.el.style.opacity !== '0');
+      if (towers.length < 2) return;
+      const rects = towers.map((o) => ({ o, b: rectOf(o.it) }));
+      let rowTop = 8;
+      for (const p of ui) {
+        if (p.r - p.l > w * 0.7 && p.t < h * 0.4 && p.b < h * 0.55) rowTop = Math.max(rowTop, p.b + 4);
+      }
+      rects.sort((a, c) => a.o.it._sx - c.o.it._sx);
+      const widths = rects.map((x) => Math.max(44, x.b.r - x.b.l));
+      const raw = widths.reduce((s, v) => s + v, 0);
+      const slots = Math.max(1, rects.length - 1);
+      const gap = Math.max(2, Math.min(8, (w - 8 - raw) / slots));
+      const total = raw + gap * slots;
+      let x = Math.max(2, (w - total) / 2);
+      for (let i = 0; i < rects.length; i++) {
+        const it = rects[i].o.it;
+        const cx = x + widths[i] / 2;
+        it._lx = cx;
+        it._lift = 0;
+        const off = Math.abs(cx - it._sx) > 1;
+        it._sy = rowTop + it._lh + (off ? 14 : 0);
+        x += widths[i] + gap;
+        commit(it);
       }
     }
   }

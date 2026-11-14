@@ -21,7 +21,7 @@ export const INVENTORY = {
 // Public sales line. The number is the one published as a tel: link on biograpi.ge.
 export const CONTACT = {
   phone: '0322 500 505',
-  tel: 'tel:0322500505',
+  tel: 'tel:+995322500505',
 };
 
 // Lead delivery. Empty on purpose: the form never posts anywhere until a URL is set.

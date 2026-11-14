@@ -41,6 +41,9 @@ function applyI18n() {
   $('#lang').setAttribute('aria-label', getLang() === 'ka' ? 'EN, ინგლისურზე გადართვა' : 'ქა, Switch to Georgian');
   $('#about-open')?.setAttribute('aria-label', t('about'));
   $('#hint-ok')?.setAttribute('aria-label', t('close'));
+  const hintP = $('#hint p');
+  if (hintP) hintP.textContent = t(matchMedia('(hover: hover) and (pointer: fine)').matches ? 'hintMouse' : 'hint');
+  document.querySelectorAll('[data-call]').forEach((a) => { a.href = CONTACT.tel; });
   $('#layers-toggle')?.setAttribute('aria-label', t('layers'));
   refreshIntroToggle();
   const srcLink = document.querySelector('#stat-src');
@@ -104,14 +107,7 @@ const statusColorHex = { available: 0x8a9b48, reserved: 0xe2a54b, queue: 0x4f6fa
 // A dollar amount is shown only for available apartments and for waitlist rows that have a price.
 // Sold, reserved, and not-for-sale never show a price.
 const showsPrice = (a) => (a.status === 'available' || a.status === 'queue') && a.price_usd != null && a.price_usd !== '';
-const priceOf = (a) => {
-  if (showsPrice(a)) return fmtUsd(a.price_usd);
-  if (a.status === 'sold') return t('soldPrice');
-  if (a.status === 'reserved') return t('reservedPrice');
-  if (a.status === 'nfs') return t('nfs');
-  if (a.status === 'queue') return t('queue');
-  return '—';
-};
+const priceOf = (a) => (showsPrice(a) ? fmtUsd(a.price_usd) : '');
 const aptById = (id) => state.doc.apartments.find((a) => a.id === id);
 function matches(a, f = state.filters) {
   if (f.kinds.size && !f.kinds.has(a.type.kind)) return false;
@@ -289,7 +285,9 @@ function paintIntro() {
   const prices = free.filter(showsPrice).map((a) => a.price_usd);
   const min = prices.length ? Math.min(...prices) : null;
   const from = min == null ? '' : (getLang() === 'ka' ? ` · ${fmtUsd(min)}-დან` : ` · from ${fmtUsd(min)}`);
-  el.textContent = `${free.length} ${t('freeApts')}${from}`;
+  const d = snapDate();
+  const asOf = d ? (getLang() === 'ka' ? ` · ${d}-ის მდგომარეობით` : ` · as of ${d}`) : '';
+  el.textContent = `${free.length} ${t('freeApts')}${from}${asOf}`;
 }
 function legend(id) {
   const present = new Set(state.doc.apartments.filter((a) => a.block === id).map((a) => a.status));
@@ -330,7 +328,7 @@ function renderExplorer() {
   } else if (state.view === 'floor') {
     const apts = floorApts();
     el.innerHTML = `<p class="eyebrow">${towerName(state.tower)} · ${t('floor')} ${state.floor}</p><h2>${t('onFloor')}: ${filteredCount(apts)} ${t('apartments')}</h2><p>${t('selectApt')}</p>${legend(state.tower)}
-      <ul class="apt-list">${apts.map((a) => `<li><button data-apt="${a.id}" ${a.id === state.apt ? 'aria-current="true"' : ''} style="${filtersActive() && !matches(a) ? 'opacity:.45' : ''}"><i class="dot ${a.status}"></i><span><b>№ ${a.number}</b> · ${kindLabel(a.type.kind)}<br/><span class="meta">${a.area} ${m2()} · ${statusLabel(a.status)}</span></span><span class="pr">${priceOf(a)}</span></button></li>`).join('')}</ul>
+      <ul class="apt-list">${apts.map((a) => `<li><button data-apt="${a.id}" ${a.id === state.apt ? 'aria-current="true"' : ''} style="${filtersActive() && !matches(a) ? 'opacity:.45' : ''}"><i class="dot ${a.status}"></i><span><b>№ ${a.number}</b> · ${kindLabel(a.type.kind)}<br/><span class="meta">${a.area} ${m2()} · ${statusLabel(a.status)}</span></span>${showsPrice(a) ? `<span class="pr">${priceOf(a)}</span>` : ''}</button></li>`).join('')}</ul>
       <div class="floor-grid" style="margin-top:10px;grid-template-columns:repeat(2,1fr)">${state.floor < 36 ? `<button data-floor="${state.floor + 1}">↑ ${state.floor + 1}</button>` : '<span></span>'}${state.floor > 6 ? `<button data-floor="${state.floor - 1}">↓ ${state.floor - 1}</button>` : ''}</div>
       <p class="note">${t('schematicNote')} ${sourceNote(state.tower)}</p>`;
   }
@@ -412,7 +410,7 @@ function renderCard() {
   if (!a) { if (!$('#apt-card').hidden) showOnly(basePanel()); return; }
   showOnly('apt');
   const ty = a.type; const tab = !ty.plan_2d ? '3d' : !ty.plan_3d ? '2d' : state.planTab; const img = tab === '3d' ? ty.plan_3d : ty.plan_2d; const src = /^https?:/.test(img) ? img : BASE + img;
-  el.innerHTML = `<div class="sheet-head"><div><p class="eyebrow">${towerName(a.block)} · ${t('floor')} ${a.floor}</p><h2>${t('apartment')} № ${a.number}</h2><p class="apt-head-meta"><b class="apt-price">${priceOf(a)}</b><span class="status-pill"><i class="dot ${a.status}"></i>${statusLabel(a.status)}</span></p></div><div class="head-actions"><button class="x" data-copy type="button" aria-label="${t('copyLink')}"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 7a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3h-2v2a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-7a3 3 0 0 1 3-3h2V7Zm2 2v2H6a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1h-3V9Zm2-2a1 1 0 0 0-1 1v7h3a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2Z"/></svg></button><button class="x" data-close aria-label="${t('close')}">×</button></div></div>
+  el.innerHTML = `<div class="sheet-head"><div><p class="eyebrow">${towerName(a.block)} · ${t('floor')} ${a.floor}</p><h2>${t('apartment')} № ${a.number}</h2><p class="apt-head-meta">${showsPrice(a) ? `<b class="apt-price">${priceOf(a)}</b>` : ''}<span class="status-pill"><i class="dot ${a.status}"></i>${statusLabel(a.status)}</span></p></div><div class="head-actions"><button class="x" data-copy type="button" aria-label="${t('copyLink')}"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 7a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3h-2v2a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-7a3 3 0 0 1 3-3h2V7Zm2 2v2H6a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1h-3V9Zm2-2a1 1 0 0 0-1 1v7h3a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2Z"/></svg></button><button class="x" data-close aria-label="${t('close')}">×</button></div></div>
     <div class="apt-body">
     <div class="tabs" role="group">${ty.plan_2d ? `<button data-tab="2d" aria-pressed="${tab === '2d'}">${t('plan2d')}</button>` : ''}${ty.plan_3d ? `<button data-tab="3d" aria-pressed="${tab === '3d'}">${t('plan3d')}</button>` : ''}</div>
     <div class="plan"><img src="${src}" alt="${kindLabel(ty.kind)}, ${a.area} ${m2()}" loading="lazy" referrerpolicy="no-referrer" /></div>
@@ -444,7 +442,14 @@ async function copyLink() {
   try { await navigator.clipboard.writeText(url); }
   catch { const ta = document.createElement('textarea'); ta.value = url; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
   announce(t('linkCopied'));
+  toast(t('linkCopied'));
   track('copy_link', { view: state.view });
+}
+function toast(msg) {
+  let el = $('#toast');
+  if (!el) { el = document.createElement('div'); el.id = 'toast'; el.setAttribute('role', 'status'); app.appendChild(el); }
+  el.textContent = msg; el.hidden = false;
+  clearTimeout(toast._t); toast._t = setTimeout(() => { el.hidden = true; }, 2200);
 }
 $('#apt-card').addEventListener('click', (e) => {
   if (e.target.closest('[data-close]')) { closeApt(); return; }
@@ -468,9 +473,9 @@ $('#apt-card').addEventListener('error', (e) => {
 // ---------- filters ----------
 function renderFilters() {
   const el = $('#filters'); const f = state.filters;
-  const rank = { available: 0, queue: 1, reserved: 2, sold: 3, nfs: 4 };
+  const group = (a) => (a.status === 'available' ? 0 : a.status === 'queue' ? 1 : a.status === 'reserved' ? 2 : a.status === 'sold' ? 3 : 4);
   const priceKey = (a) => (showsPrice(a) ? Number(a.price_usd) : Number.POSITIVE_INFINITY);
-  const res = state.doc.apartments.filter((a) => matches(a)).sort((x, y) => priceKey(x) - priceKey(y) || (rank[x.status] ?? 9) - (rank[y.status] ?? 9) || x.block.localeCompare(y.block) || x.floor - y.floor);
+  const res = state.doc.apartments.filter((a) => matches(a)).sort((x, y) => group(x) - group(y) || priceKey(x) - priceKey(y) || x.block.localeCompare(y.block) || x.floor - y.floor);
   const kinds = ['studio', '1br', '2br'], sts = STATUSES;
   el.innerHTML = `<div class="sheet-head"><h2>${t('filters')}</h2><button class="x" data-close aria-label="${t('close')}">×</button></div>
     <form id="ff">
@@ -481,7 +486,7 @@ function renderFilters() {
       <fieldset><legend>${t('priceRange')}</legend><div class="range"><input name="priceMin" inputmode="numeric" placeholder="${t('min')}" value="${f.priceMin}" aria-label="${t('priceRange')} min"/><input name="priceMax" inputmode="numeric" placeholder="${t('max')}" value="${f.priceMax}" aria-label="${t('priceRange')} max"/></div></fieldset>
     </form>
     <p><b>${res.length}</b> ${t('results')}</p>
-    <ul class="apt-list results" aria-label="${t('list')}">${res.slice(0, filterLimit).map((a) => `<li><button data-apt="${a.id}"><i class="dot ${a.status}"></i><span><b>№ ${a.number}</b> · ${towerName(a.block)} · ${t('floor')} ${a.floor}<br/><span class="meta">${kindLabel(a.type.kind)} · ${a.area} ${m2()}</span></span><span class="pr">${priceOf(a)}</span></button></li>`).join('') || `<li>${t('noResults')}</li>`}</ul>
+    <ul class="apt-list results" aria-label="${t('list')}">${res.slice(0, filterLimit).map((a) => `<li><button data-apt="${a.id}"><i class="dot ${a.status}"></i><span><b>№ ${a.number}</b> · ${towerName(a.block)} · ${t('floor')} ${a.floor}<br/><span class="meta">${kindLabel(a.type.kind)} · ${a.area} ${m2()} · ${statusLabel(a.status)}</span></span>${showsPrice(a) ? `<span class="pr">${priceOf(a)}</span>` : ''}</button></li>`).join('') || `<li>${t('noResults')}</li>`}</ul>
     ${res.length > filterLimit ? `<button type="button" class="btn-ghost more" data-more>${t('showMore')} (+${Math.min(40, res.length - filterLimit)})</button>` : ''}
     <p class="note">${t('priceUpdated')} ${snapDate()}</p>
     <div class="filter-foot"><button class="btn-ghost" data-reset>${t('reset')}</button><button class="primary" data-close>${t('showList')} (${res.length})</button></div>`;
@@ -635,10 +640,23 @@ document.addEventListener('keydown', (e) => {
 function showHint() {
   if (localStorage.getItem('hisni-hint')) return;
   const h = $('#hint'); h.hidden = false;
-  const done = () => { if (h.hidden) return; h.hidden = true; localStorage.setItem('hisni-hint', '1'); document.removeEventListener('pointerdown', onFirst, true); };
-  const onFirst = () => done();
-  $('#hint-ok').onclick = (e) => { e.stopPropagation(); done(); };
-  document.addEventListener('pointerdown', onFirst, true);
+  let closed = false;
+  const done = () => {
+    if (closed) return;
+    closed = true;
+    h.hidden = true;
+    localStorage.setItem('hisni-hint', '1');
+    document.removeEventListener('pointerdown', onDoc, true);
+  };
+  // Swallow the whole gesture on the strip so it cannot fall through to a tower label.
+  ['pointerdown', 'pointerup', 'click', 'touchend'].forEach((type) => {
+    h.addEventListener(type, (e) => {
+      e.stopPropagation();
+      if (type !== 'pointerdown') requestAnimationFrame(done);
+    }, true);
+  });
+  const onDoc = (e) => { if (!h.contains(e.target)) done(); };
+  document.addEventListener('pointerdown', onDoc, true);
 }
 
 // cheap capability check; real context creation failure is handled in boot()
@@ -697,7 +715,7 @@ async function start3D(params, ctxP) {
       if (!tip) { tip = document.createElement('div'); tip.className = 'tooltip'; app.appendChild(tip); }
       if (!hit) { tip.hidden = true; if (state.view === 'towers') S.highlightTower(null); return; }
       tip.hidden = false; tip.style.left = e.clientX + 'px'; tip.style.top = e.clientY + 'px';
-      if (hit.kind === 'apt') { const a = aptById(hit.id); tip.textContent = `№ ${a.number} · ${kindLabel(a.type.kind)} · ${a.area} ${m2()} · ${priceOf(a)}`; }
+      if (hit.kind === 'apt') { const a = aptById(hit.id); tip.textContent = `№ ${a.number} · ${kindLabel(a.type.kind)} · ${a.area} ${m2()}${showsPrice(a) ? ` · ${priceOf(a)}` : ''} · ${statusLabel(a.status)}`; }
       else { tip.textContent = towerName(hit.id); if (state.view === 'towers' || state.view === 'intro') S.highlightTower(hit.id); }
     },
   });
