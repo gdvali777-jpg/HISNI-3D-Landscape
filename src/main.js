@@ -598,12 +598,13 @@ function makeLabels(S) {
     const el = document.createElement('div'); el.className = `label ${p.cat}`; el.innerHTML = `<button><i>${p.icon}</i><span class="full"></span><span class="short"></span></button>`;
     el.querySelector('button').addEventListener('click', () => showPlace(p)); root.appendChild(el); labelEls.push({ el, poi: p });
     if (!['metro', 'school', 'bus'].includes(p.cat)) el.dataset.pri = 'low';
-    S.addLabel(el, { x: p.x, y: 6, z: p.z }, 10 + POIS.indexOf(p), false);
+    const rank = { metro: -1, school: 3, bus: 4 };
+    S.addLabel(el, { x: p.x, y: 6, z: p.z }, rank[p.cat] ?? 12 + POIS.indexOf(p), false);
   }
   for (const b of state.doc.blocks) {
     const el = document.createElement('div'); el.className = `label tower ${b.has_data ? 'data' : ''}`; el.innerHTML = '<button><span></span></button>';
     el.querySelector('button').addEventListener('click', () => setView('block', { tower: b.id })); root.appendChild(el); labelEls.push({ el, tower: b.id });
-    S.addLabel(el, S.towerLabelPos(b.id), 0, true);
+    S.addLabel(el, S.towerLabelPos(b.id), 1, true);
   }
   renderLabels();
 }

@@ -548,7 +548,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
       it.el.style.setProperty('--stem', off ? '0px' : `${14 + lift}px`);
       it.el.style.transform = off ? `translate(-50%,-100%) translate(${lx}px,${o.sy - 14 - lift}px)` : `translate(-50%,-100%) translate(${o.sx}px,${o.sy}px)`;
       it.el.classList.toggle('offset', off);
-      it.el.style.opacity = show ? '' : '0'; it.el.style.pointerEvents = show ? '' : 'none';
+      it.el.style.opacity = show ? '' : '0'; it.el.style.pointerEvents = show ? 'auto' : 'none';
       it.el.setAttribute('aria-hidden', show ? 'false' : 'true');
       if (!it.leader) { it.leader = document.createElement('i'); it.leader.className = 'leader'; it.el.parentNode?.appendChild(it.leader); }
       if (show && off) {
@@ -759,7 +759,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
           const off = Math.abs(it._lx - it._sx) > 1;
           it._sy = y + it._lh + (off ? 14 : 0);
           it.el.style.opacity = '';
-          it.el.style.pointerEvents = '';
+          it.el.style.pointerEvents = 'auto';
           it.el.setAttribute('aria-hidden', 'false');
           x += widths[i] + gap;
           commit(it);
@@ -805,25 +805,128 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         if (!moved) break;
       }
     }
+    separateTowers();
+    rescueLabels();
     cullUiHits();
+    portraitTowerGroup();
+    function rankOf(it) {
+      if (it.el.classList.contains('metro')) return 0;
+      if (it.isTower) return 1;
+      if (it.el.classList.contains('school')) return 2;
+      if (it.el.classList.contains('bus')) return 3;
+      return 9;
+    }
+    function hideLabel(it) {
+      it.el.style.opacity = '0';
+      it.el.style.pointerEvents = 'none';
+      it.el.setAttribute('aria-hidden', 'true');
+      if (it.leader) it.leader.style.display = 'none';
+    }
+    function reveal(it) {
+      it.el.style.opacity = '';
+      it.el.style.pointerEvents = 'auto';
+      it.el.setAttribute('aria-hidden', 'false');
+    }
+    function placeBox(it, cx, top) {
+      it._lx = cx;
+      it._lift = 0;
+      const off = Math.abs(cx - it._sx) > 1;
+      it._sy = off ? top + it._lh + 14 : top + it._lh;
+      reveal(it);
+      commit(it);
+    }
+    function freeBox(box, self) {
+      if (box.l < 4 || box.t < 4 || box.r > w - 4 || box.b > h - 4) return false;
+      if (panels.some((p) => overlap(box, p))) return false;
+      for (const o of items) {
+        if (o.it === self || o.it.el.style.opacity === '0') continue;
+        if (overlap(box, rectOf(o.it))) return false;
+      }
+      return true;
+    }
+    function separateTowers() {
+      const towers = items.filter((o) => o.it.isTower && o.it.el.style.opacity !== '0');
+      for (let pass = 0; pass < 20; pass++) {
+        let moved = false;
+        for (let i = 0; i < towers.length; i++) {
+          for (let j = i + 1; j < towers.length; j++) {
+            const A = rectOf(towers[i].it), B = rectOf(towers[j].it);
+            const o = overlap(A, B);
+            if (!o) continue;
+            const mover = (B.l + B.r >= A.l + A.r ? towers[j] : towers[i]).it;
+            const stay = mover === towers[j].it ? towers[i].it : towers[j].it;
+            const prevX = mover._lx, prevY = mover._sy;
+            const dir = rectOf(mover).l >= rectOf(stay).l ? 1 : -1;
+            mover._lx += dir * (o.iw + 10);
+            clampItem(mover);
+            const blocked = () => overlap(rectOf(mover), rectOf(stay)) || panels.some((p) => overlap(rectOf(mover), p));
+            if (blocked()) {
+              mover._lx = prevX;
+              mover._sy += (rectOf(mover).t >= rectOf(stay).t ? 1 : -1) * (o.ih + 10);
+              clampItem(mover);
+              if (blocked()) { mover._lx = prevX; mover._sy = prevY; }
+            }
+            commit(mover);
+            moved = true;
+          }
+        }
+        if (!moved) break;
+      }
+    }
+    function rescueLabels() {
+      const order = items.filter((o) => o.vis && rankOf(o.it) <= 3).sort((a, b) => rankOf(a.it) - rankOf(b.it));
+      for (const o of order) {
+        const it = o.it;
+        const current = it.el.style.opacity === '0' ? null : rectOf(it);
+        const onLabel = current && items.some((q) => q.it !== it && q.it.el.style.opacity !== '0' && rankOf(q.it) < rankOf(it) && overlap(current, rectOf(q.it)));
+        if (current && !panels.some((p) => overlap(current, p)) && !onLabel) continue;
+        const dxs = [0, 48, -48, 100, -100, 160, -160, 240, -240, 320, -320];
+        const dys = [0, 32, 64, 100, 150];
+        let best = null;
+        let bestD = 1e9;
+        for (const dy of dys) {
+          for (const dx of dxs) {
+            const cx = Math.min(w - 8 - it._lw / 2, Math.max(8 + it._lw / 2, it._sx + dx));
+            for (const top of [it._sy - 18 - dy - it._lh, it._sy + 18 + dy]) {
+              const box = { l: cx - it._lw / 2, t: top, r: cx + it._lw / 2, b: top + it._lh };
+              if (!freeBox(box, it)) continue;
+              const d = Math.abs(cx - it._sx) + Math.abs(top - (it._sy - it._lh));
+              if (d < bestD) { bestD = d; best = { cx, top }; }
+            }
+          }
+        }
+        if (!best && rankOf(it) === 0) {
+          for (let top = 64; top < h - it._lh - 16; top += 32) {
+            for (let cx = it._lw / 2 + 12; cx < w - it._lw / 2 - 12; cx += 40) {
+              const box = { l: cx - it._lw / 2, t: top, r: cx + it._lw / 2, b: top + it._lh };
+              if (!freeBox(box, it)) continue;
+              const d = Math.abs(cx - it._sx) + Math.abs(top - it._sy);
+              if (d < bestD) { bestD = d; best = { cx, top }; }
+            }
+          }
+        }
+        if (best) placeBox(it, best.cx, best.top);
+        else if (current && panels.some((p) => overlap(current, p))) hideLabel(it);
+      }
+    }
     function cullUiHits() {
-      const hide = (it) => {
-        it.el.style.opacity = '0';
-        it.el.style.pointerEvents = 'none';
-        it.el.setAttribute('aria-hidden', 'true');
-        if (it.leader) it.leader.style.display = 'none';
-      };
       for (const o of items) {
         if (o.it.el.style.opacity === '0') continue;
-        if (panels.some((p) => overlap(rectOf(o.it), { l: p.l - 4, t: p.t - 4, r: p.r + 4, b: p.b + 4 }))) hide(o.it);
+        const b = precise ? (() => {
+          const r = o.it.el.getBoundingClientRect();
+          return { l: r.left - cr.left, t: r.top - cr.top, r: r.right - cr.left, b: r.bottom - cr.top };
+        })() : rectOf(o.it);
+        const crosses = (p) => b.r > p.l && b.l < p.r && b.b > p.t && b.t < p.b;
+        if (panels.some(crosses)) hideLabel(o.it);
+        else reveal(o.it);
       }
-      if (!precise) return;
-      for (const o of items) {
-        if (o.it.el.style.opacity === '0') continue;
-        const r = o.it.el.getBoundingClientRect();
-        const b = { l: r.left - cr.left, t: r.top - cr.top, r: r.right - cr.left, b: r.bottom - cr.top };
-        if (panels.some((p) => overlap(b, { l: p.l - 4, t: p.t - 4, r: p.r + 4, b: p.b + 4 }))) hide(o.it);
-      }
+    }
+    function portraitTowerGroup() {
+      if (!(h > w && w < 700)) return;
+      const group = items.filter((o) => o.it.isTower && o.vis);
+      if (group.length < 4) return;
+      const visible = group.filter((o) => o.it.el.style.opacity !== '0');
+      if (visible.length > 0 && visible.length < group.length) group.forEach((o) => hideLabel(o.it));
     }
   }
 
