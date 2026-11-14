@@ -8,7 +8,7 @@ const app = $('#app');
 const fmtNum = (n) => n.toLocaleString('en-US');
 const m2 = () => (getLang() === 'en' ? 'm²' : 'მ²');
 const typeCode = (ty) => ty.code;
-const srcBadge = (a) => (a.sample ? `<span class="sample-badge">${t('sample')}</span>` : a.source === 'bitrix24' ? `<span class="sample-badge site">Bitrix24</span>` : `<span class="sample-badge site">${t('siteData')}</span>`);
+const srcBadge = (a) => (a.sample ? `<span class="sample-badge">${t('sample')}</span>` : '');
 const snapDate = () => { const d = state.doc?.meta.site_snapshot?.date; return d ? d.split('-').reverse().join('.') : ''; };
 const orientLabel = (o) => (STRINGS[getLang()].dirs || {})[o] || o;
 const fmtUsd = (n) => (n == null ? '—' : '$' + fmtNum(n));
@@ -37,6 +37,11 @@ function applyI18n() {
   document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', `${el.textContent.trim()} ${t(el.dataset.i18nAria)}`); el.title = t(el.dataset.i18nAria); });
   $('#lang').textContent = t('lang');
+  $('#lang').setAttribute('aria-label', getLang() === 'ka' ? 'EN, English' : 'ქა, ქართული');
+  $('#layers-toggle')?.setAttribute('aria-label', t('layers'));
+  refreshIntroToggle();
+  const srcLink = document.querySelector('#stat-src');
+  if (srcLink) srcLink.href = t('statSrcUrl');
   const collapsed = $('#explorer').classList.contains('is-collapsed');
   $('#explorer-close').setAttribute('aria-label', t('close'));
   $('#explorer-close').title = t('close');
@@ -45,6 +50,46 @@ function applyI18n() {
   renderLabels(); renderExplorer(); renderCard(); state.scene?.request(); if (!$('#filters').hidden) renderFilters();
 }
 $('#lang').addEventListener('click', () => { setLang(getLang() === 'ka' ? 'en' : 'ka'); applyI18n(); });
+const INTRO_KEY = 'hisni-intro';
+function introCollapsedDefault() {
+  const saved = sessionStorage.getItem(INTRO_KEY);
+  if (saved === 'collapsed' || saved === 'open') return saved === 'collapsed';
+  return matchMedia('(max-height: 520px)').matches;
+}
+function applyIntroCollapsed(collapsed, persist) {
+  $('#intro').classList.toggle('is-collapsed', collapsed);
+  refreshIntroToggle();
+  if (persist) sessionStorage.setItem(INTRO_KEY, collapsed ? 'collapsed' : 'open');
+  state.scene?.request();
+}
+function refreshIntroToggle() {
+  const btn = $('#intro-toggle'); if (!btn) return;
+  const collapsed = $('#intro').classList.contains('is-collapsed');
+  btn.setAttribute('aria-expanded', String(!collapsed));
+  btn.setAttribute('aria-label', t(collapsed ? 'introExpand' : 'introCollapse'));
+}
+applyIntroCollapsed(introCollapsedDefault(), false);
+{
+  const handle = $('#intro-toggle');
+  let py = null, moved = false;
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    py = e.clientY; moved = false;
+    handle.setPointerCapture?.(e.pointerId);
+  });
+  handle.addEventListener('pointermove', (e) => { if (py != null && Math.abs(e.clientY - py) > 8) moved = true; });
+  handle.addEventListener('pointerup', (e) => {
+    if (py == null) return;
+    const dy = e.clientY - py; py = null;
+    if (dy > 36) { moved = true; applyIntroCollapsed(true, true); }
+    else if (dy < -36) { moved = true; applyIntroCollapsed(false, true); }
+  });
+  handle.addEventListener('pointercancel', () => { py = null; });
+  handle.addEventListener('click', () => {
+    if (moved) { moved = false; return; }
+    applyIntroCollapsed(!$('#intro').classList.contains('is-collapsed'), true);
+  });
+}
 
 // ---------- helpers ----------
 const kindLabel = (k) => t(k);
@@ -90,7 +135,49 @@ function showOnly(panel) {
   $('#apt-card').hidden = panel !== 'apt';
   $('#place-card').hidden = panel !== 'place';
   if (panel !== 'explorer') $('#explorer').classList.remove('is-collapsed');
+  app.classList.toggle('side-sheet', panel === 'apt' || panel === 'filters');
 }
+let fromPop = false, seeded = false, pushed = 0, histDepth = 0, seedDepth = 0;
+function depthNow() { if (state.apt) return 4; return { intro: 0, towers: 1, block: 2, floor: 3 }[state.view] ?? 0; }
+function urlForState() {
+  const p = new URLSearchParams();
+  if (state.view && state.view !== 'intro') p.set('view', state.view);
+  if (state.tower && (state.view === 'block' || state.view === 'floor' || state.apt)) p.set('tower', state.tower);
+  if (state.view === 'floor' && state.floor != null) p.set('floor', String(state.floor));
+  if (state.apt) p.set('apt', state.apt);
+  if (getLang() === 'en') p.set('lang', 'en');
+  const q = p.toString();
+  return location.pathname + (q ? `?${q}` : '');
+}
+function syncHistory() {
+  if (fromPop || !state.doc) return;
+  const url = urlForState();
+  const d = depthNow();
+  const here = location.pathname + location.search;
+  if (!seeded) { history.replaceState({ hisni: d }, '', url); seeded = true; histDepth = d; seedDepth = d; pushed = 0; return; }
+  if (d > histDepth && here !== url) { history.pushState({ hisni: d }, '', url); pushed += 1; }
+  else if (here !== url) history.replaceState({ hisni: d }, '', url);
+  histDepth = d;
+}
+function applyHistoryUrl() {
+  const p = new URLSearchParams(location.search);
+  const lang = p.get('lang');
+  if (lang === 'en' || lang === 'ka') { setLang(lang); applyI18n(); }
+  state.apt = null;
+  const view = p.get('view') || 'intro';
+  if (p.get('apt')) selectApt(p.get('apt'));
+  else if (view === 'floor') setView('floor', { tower: p.get('tower'), floor: +(p.get('floor') || 6) });
+  else if (view === 'block') setView('block', { tower: p.get('tower') });
+  else if (view === 'towers') setView('towers', { tower: null });
+  else setView('intro', { tower: null, floor: null });
+}
+window.addEventListener('popstate', () => {
+  fromPop = true;
+  applyHistoryUrl();
+  histDepth = typeof history.state?.hisni === 'number' ? history.state.hisni : depthNow();
+  pushed = Math.max(0, histDepth - seedDepth);
+  fromPop = false;
+});
 function setView(v, opts = {}) {
   expandSheet();
   Object.assign(state, { view: v }, opts);
@@ -104,6 +191,8 @@ function setView(v, opts = {}) {
   if (v !== 'floor') state.apt = null;
   showOnly(v === 'intro' ? 'intro' : 'explorer');
   renderCrumbs(); renderExplorer();
+  const body = $('#explorer-body'); if (body) body.scrollTop = 0;
+  syncHistory();
 }
 const floorApts = () => state.doc.apartments.filter((a) => a.block === state.tower && a.floor === state.floor);
 function recolor() {
@@ -125,8 +214,8 @@ $('#crumbs').addEventListener('click', (e) => { const b = e.target.closest('[dat
 function blockOf(id) { return state.doc.blocks.find((x) => x.id === id); }
 function blockSource(id) { return blockOf(id)?.source; }
 const dmy = (d) => (d ? d.split('-').reverse().join('.') : '');
-function srcLabel(id) { const b = blockOf(id); return b?.source === 'bitrix24' ? `${t('bitrixData')} (snapshot, ${dmy(b.snapshot)})` : b?.source === 'biograpi.ge' ? `${t('siteData')} (snapshot, ${dmy(b.snapshot)})` : t('sample'); }
-function sourceNote(id) { const s = blockSource(id); return s === 'bitrix24' ? `${t('bitrixSrc')} (snapshot, ${dmy(blockOf(id).snapshot)}). ${t('listPrice')}` : s === 'biograpi.ge' ? `${t('siteSrc')} (snapshot, ${snapDate()})` : t('sampleNote'); }
+function srcLabel(id) { const b = blockOf(id); const d = dmy(b?.snapshot) || snapDate(); return d ? `${t('updated')} ${d}` : (b?.source ? '' : t('sample')); }
+function sourceNote(id) { const b = blockOf(id); if (!b?.source) return t('sampleNote'); const note = srcLabel(id); return note ? `${note}. ${t('listPrice')}` : t('listPrice'); }
 function legend(id) {
   const present = new Set(state.doc.apartments.filter((a) => a.block === id).map((a) => a.status));
   const src = blockSource(id);
@@ -134,7 +223,7 @@ function legend(id) {
     const on = state.filters.statuses.has(s);
     return `<button type="button" class="legend-chip ${s}" data-status="${s}" aria-pressed="${on}"><i class="dot ${s}" aria-hidden="true"></i>${statusLabel(s)}</button>`;
   }).join('');
-  const badge = state.doc?.meta.live ? '' : `<span class="sample-badge ${src === 'sample' ? '' : 'site'}">${srcLabel(id)}</span>`;
+  const badge = ''; void src;
   return `<div class="legend" role="group" aria-label="${esc(t('status'))}">${chips}${badge}</div>`;
 }
 function toggleStatus(s) {
@@ -193,8 +282,9 @@ function collapseSheet() {
   $('#explorer-handle')?.setAttribute('aria-label', t('sheetExpand'));
 }
 function stepBack() {
-  if (!$('#apt-card').hidden) { state.apt = null; renderCard(); renderExplorer(); recolor(); return; }
+  if (!$('#apt-card').hidden) { if (pushed > 0) { history.back(); return; } state.apt = null; renderCard(); renderExplorer(); recolor(); return; }
   if (!$('#filters').hidden || !$('#place-card').hidden) { showOnly(basePanel()); return; }
+  if (pushed > 0) { history.back(); return; }
   if (state.view === 'floor') setView('block');
   else if (state.view === 'block') setView('towers', { tower: null });
   else if (state.view === 'towers') setView('intro', { tower: null });
@@ -227,8 +317,8 @@ $('#explorer-close').addEventListener('click', (e) => { e.stopPropagation(); ste
 
 function selectApt(id, { fromList } = {}) {
   const a = aptById(id); if (!a) return;
-  if (state.view !== 'floor' || state.floor !== a.floor || state.tower !== a.block) { state.tower = a.block; setView('floor', { floor: a.floor }); }
-  state.apt = id; renderCard(); renderExplorer(); recolor(); announce(`№ ${a.number}`);
+  if (state.view !== 'floor' || state.floor !== a.floor || state.tower !== a.block) { state.apt = null; state.tower = a.block; setView('floor', { floor: a.floor }); }
+  state.apt = id; renderCard(); renderExplorer(); recolor(); syncHistory(); announce(`№ ${a.number}`);
 }
 
 function renderCard() {
@@ -242,13 +332,12 @@ function renderCard() {
     <div class="facts">
       <div><small>${t('area')}</small><b>${a.area} ${m2()}</b></div>
       <div><small>${t('rooms')}</small><b>${kindLabel(ty.kind)}</b></div>
-      <div><small>${t('orientation')}</small><b>${a.facing ? orientLabel(a.facing) : '—'}${a.source === 'bitrix24' ? '' : '*'}</b></div>
-      <div><small>${t('typeCode')}</small><b>${typeCode(ty)}</b></div>
+      <div><small>${t('orientation')}</small><b>${a.facing ? orientLabel(a.facing) : '—'}</b></div>
       <div><small>${t('status')}${srcBadge(a)}</small><b class="status-pill"><i class="dot ${a.status}"></i>${statusLabel(a.status)}</b></div>
-      <div><small>${t('price')}${srcBadge(a)}</small><b>${priceOf(a)}</b>${a.status !== 'nfs' && a.price_per_m2_usd ? `<small>${fmtUsd(a.price_per_m2_usd)} / ${m2()}</small>` : ''}${a.source === 'bitrix24' && a.status !== 'nfs' ? `<small>${t('listPriceShort')}</small>` : ''}</div>
+      <div><small>${t('price')}${srcBadge(a)}</small><b>${priceOf(a)}</b>${a.status !== 'nfs' && a.price_per_m2_usd ? `<small>${fmtUsd(a.price_per_m2_usd)} / ${m2()}</small>` : ''}</div>
     </div>
-    <div class="cta-row"><button class="primary accent" data-lead>${t('cta')}</button></div>
-    <p class="note">* ${t('schematicNote')} ${sourceNote(a.block)}</p>`;
+    <p class="note">* ${t('schematicNote')} ${sourceNote(a.block)}</p>
+    <div class="cta-row"><button class="primary accent" data-lead>${t('cta')}</button></div>`;
 }
 $('#apt-card').addEventListener('click', (e) => {
   if (e.target.closest('[data-close]')) { state.apt = null; renderCard(); renderExplorer(); recolor(); return; }
@@ -272,7 +361,7 @@ function renderFilters() {
     <p><b>${res.length}</b> ${t('results')}</p>
     <ul class="apt-list results" aria-label="${t('list')}">${res.slice(0, 40).map((a) => `<li><button data-apt="${a.id}"><i class="dot ${a.status}"></i><span><b>№ ${a.number}</b> · ${towerName(a.block)} · ${t('floor')} ${a.floor}<br/><span class="meta">${kindLabel(a.type.kind)} · ${a.area} ${m2()}</span></span><span class="pr">${priceOf(a)}</span></button></li>`).join('') || `<li>${t('noResults')}</li>`}</ul>
     ${res.length > 40 ? `<p class="note">+${res.length - 40}…</p>` : ''}
-    <p class="note">${t('blocksSrc')} ${snapDate()}. ${t('listPrice')}</p>
+    <p class="note">${t('updated')} ${snapDate()}. ${t('listPrice')}</p>
     <div class="filter-foot"><button class="btn-ghost" data-reset>${t('reset')}</button><button class="primary" data-close>${t('showList')} (${res.length})</button></div>`;
 }
 function readFilters() {
@@ -305,7 +394,14 @@ function openLead(id) {
     </form></div>`;
   d.showModal();
   d.querySelector('[data-close]').onclick = () => d.close();
-  d.querySelector('#lead-form').onsubmit = async (e) => { e.preventDefault(); const fd = Object.fromEntries(new FormData(e.target)); await submitLead({ ...fd, apartment_id: a.id }); e.target.querySelector('.stub').style.outline = '2px solid #8a3b22'; };
+  d.querySelector('#lead-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = Object.fromEntries(new FormData(e.target));
+    const digits = String(fd.phone || '').replace(/\D/g, '');
+    if (digits.length < 9) { e.target.querySelector('.stub').textContent = t('formPhoneInvalid'); return; }
+    await submitLead({ ...fd, apartment_id: a.id });
+    e.target.outerHTML = `<p class="stub">${t('formThanks')}</p>`;
+  };
 }
 
 // ---------- about ----------
@@ -313,14 +409,19 @@ function openAbout() {
   const d = $('#about'); const L = STRINGS[getLang()];
   const renders = ['aerial-day', 'aerial-night', 'exterior-01', 'exterior-02', 'view-04', 'view-07'];
   d.innerHTML = `<div class="dlg"><div class="dlg-head"><div><p class="eyebrow">${t('brandGroup')}</p><h2>${t('aboutTitle')}</h2></div><button class="x" data-close aria-label="${t('close')}">×</button></div>
-    ${L.aboutBody.map((p) => `<p>${esc(p)}</p>`).join('')}
-    <p class="placeholder">${t('descPending')}</p>
+    ${L.aboutBody.slice(0, 3).map((p) => `<p>${esc(p)}</p>`).join('')}
+    <p>${esc(L.aboutOffer)}</p>
+    <p class="note"><a href="${t('statSrcUrl')}" target="_blank" rel="noopener">* ${esc(t('statSrc'))}</a></p>
+    <p>${esc(L.aboutBody[3])}</p>
+    <p>${esc(L.aboutSchedule)}</p>
+    <p class="note"><a href="${t('investSrcUrl')}" target="_blank" rel="noopener">* ${esc(t('investSrc'))}</a></p>
     <h3>${t('gallery')}</h3><div class="gallery">${renders.map((r) => `<a href="${BASE}renders/${r}.webp" target="_blank" rel="noopener"><img src="${BASE}renders/${r}-thumb.webp" alt="Hisni render ${r}" loading="lazy"/></a>`).join('')}</div>
     <h3>${t('method')}</h3><p style="font-size:13px;color:var(--muted)">${t('methodBody')}</p>
     <p style="font-size:13px;color:var(--muted)">${t('address')}</p></div>`;
   d.showModal(); d.querySelector('[data-close]').onclick = () => d.close();
 }
 $('#about-open').addEventListener('click', openAbout);
+$('#intro-about')?.addEventListener('click', openAbout);
 document.querySelectorAll('dialog').forEach((d) => d.addEventListener('click', (e) => { if (e.target === d) d.close(); }));
 
 // ---------- labels ----------
@@ -366,7 +467,8 @@ $('#zoom-out').addEventListener('click', () => state.scene?.zoom(1.25));
 $('#rotate').addEventListener('click', (e) => { const on = state.scene?.toggleRotate(); e.currentTarget.setAttribute('aria-pressed', String(!!on)); });
 function goHome() {
   state.apt = null;
-  setView('intro', { tower: null, floor: null });
+  if (pushed > 0) history.go(-pushed);
+  else setView('intro', { tower: null, floor: null });
 }
 let homeAt = 0;
 function onHome(e) {
@@ -401,6 +503,7 @@ async function boot() {
   applyI18n();
   const ctxP = fetch(`${BASE}data/context.json`).then((r) => r.json());
   state.doc = await loadApartments(BASE);
+  if (!seeded) syncHistory();
   const params = new URLSearchParams(location.search);
   const webgl = hasWebGL() && params.get('webgl') !== '0';
   if (!webgl) return startFallback();

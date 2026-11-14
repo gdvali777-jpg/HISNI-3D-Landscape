@@ -165,7 +165,7 @@ const idle = () => new Promise((r) => (window.requestIdleCallback ? requestIdleC
 export async function createScene(container, ctx, { weak = false, onPick, onHover, onProgress } = {}) {
   let _t = performance.now(); const DBG = location.search.includes('debug');
   const step = async (p) => { if (DBG) console.log('[hisni] step', p, Math.round(performance.now() - _t)); onProgress?.(p); await idle(); _t = performance.now(); };
-  const renderer = new THREE.WebGLRenderer({ antialias: !weak, powerPreference: 'high-performance' });
+  const renderer = new THREE.WebGLRenderer({ antialias: !weak, powerPreference: 'high-performance', preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, weak ? 1.25 : 2));
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
@@ -355,6 +355,11 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     podMats[1].emissive = new THREE.Color(0.35 * lit, 0.28 * lit, 0.18 * lit);
     ground.material.color.setHex(m === 'night' ? 0x3a3c44 : C.ground);
     shadowsDirty(); request();
+    // WebKit may draw the requested frame before the new shaders finish compiling.
+    if (renderer.compileAsync) renderer.compileAsync(scene, camera).then(() => { shadowsDirty(); request(); }).catch(() => {});
+    let frames = 0;
+    const pump = () => { request(); if (++frames < 20) requestAnimationFrame(pump); };
+    requestAnimationFrame(pump);
   }
 
   // labels (HTML overlay)
@@ -398,7 +403,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
       const sx = (v3.x * 0.5 + 0.5) * w, sy = (-v3.y * 0.5 + 0.5) * h;
       const onScreen = v3.z < 1 && Math.abs(v3.x) < 1.05 && Math.abs(v3.y) < 1.05;
       const near = v3.z < 1 && Math.abs(v3.x) < 1.8 && Math.abs(v3.y) < 1.8;
-      return { it, vis: onScreen || (near && it.priority < 13), sx, sy, lw: it.el.offsetWidth, lh: (it.el.firstElementChild?.offsetHeight || 30) };
+      return { it, vis: (v3.z < 1 && it.isTower) || onScreen || (near && it.priority < 13), sx, sy, lw: it.el.offsetWidth, lh: (it.el.firstElementChild?.offsetHeight || 30) };
     }).filter((o) => { if (o.lw > 0) return true; if (o.it.leader) o.it.leader.style.display = 'none'; return false; });
     // write phase: try positions above the anchor, then beside the blocking tower (leader line)
     for (const o of items) {
@@ -518,6 +523,26 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
       }
       if (!changed) break;
     }
+    const ui = [];
+    for (const el of document.querySelectorAll('.header, #crumbs, #filter-open, #lang, #intro, #explorer, .sheet, .layers, .tools, .place-card')) {
+      if (!el || el.hidden || getComputedStyle(el).display === 'none') continue;
+      const r = el.getBoundingClientRect();
+      ui.push({ l: r.left - cr.left, t: r.top - cr.top, r: r.right - cr.left, b: r.bottom - cr.top });
+    }
+    const hitsUi = (b) => ui.some((p) => b.l < p.r - 2 && b.r > p.l + 2 && b.t < p.b - 2 && b.b > p.t + 2);
+    for (let pass = 0; pass < 10; pass++) {
+      let moved = false;
+      for (const o of shown()) {
+        const b = boxOf(o.it.el);
+        if (!hitsUi(b)) continue;
+        const below = ui.filter((p) => b.t < p.b && b.b > p.t && b.l < p.r && b.r > p.l);
+        const push = below.reduce((m, p) => Math.max(m, p.b - b.t + 6), 18);
+        o.it._sy += push;
+        reapply(o.it);
+        moved = true;
+      }
+      if (!moved) break;
+    }
     for (const o of shown()) {
       const b = boxOf(o.it.el);
       let dx = 0, dy = 0;
@@ -526,6 +551,34 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
       if (b.t < PAD) dy = PAD - b.t;
       else if (b.b > h - PAD) dy = (h - PAD) - b.b;
       if (dx || dy) { o.it._lx += dx; o.it._sy += dy; reapply(o.it); }
+    }
+    // Final separation. UI nudges and clamping can put the metro and school pills back on top of each other.
+    for (let pass = 0; pass < 20; pass++) {
+      const list = shown();
+      let changed = false;
+      for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) {
+          const A = boxOf(list[i].it.el), B = boxOf(list[j].it.el);
+          const iw = Math.min(A.r, B.r) - Math.max(A.l, B.l);
+          const ih = Math.min(A.b, B.b) - Math.max(A.t, B.t);
+          if (iw <= 2 || ih <= 2) continue;
+          const moveJ = list[j].it.priority >= list[i].it.priority;
+          const mover = (moveJ ? list[j] : list[i]).it;
+          const mine = moveJ ? B : A;
+          const other = moveJ ? A : B;
+          const below = (mine.t + mine.b) / 2 >= (other.t + other.b) / 2;
+          mover._sy += below ? ih + 12 : -(ih + 12);
+          reapply(mover);
+          changed = true;
+        }
+      }
+      if (!changed) break;
+    }
+    for (const o of shown()) {
+      const b = boxOf(o.it.el);
+      if (b.l < PAD) o.it._lx += PAD - b.l;
+      else if (b.r > w - PAD) o.it._lx += (w - PAD) - b.r;
+      reapply(o.it);
     }
   }
 

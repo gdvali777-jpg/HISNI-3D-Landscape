@@ -19,13 +19,18 @@
     <div class="header-right">
       <button id="filter-open" class="chip" data-i18n="filters"></button>
       <button id="about-open" class="chip ghost" data-i18n="about"></button>
-      <button id="lang" class="chip lang" aria-label="Language"></button>
+      <button id="lang" class="chip lang" aria-label="EN, English"></button>
     </div>
   </header>
 
   <section id="intro" class="intro panel">
+    <button type="button" id="intro-toggle" class="intro-toggle" aria-expanded="true"><span class="intro-chev" aria-hidden="true"></span></button>
+    <div class="intro-keep">
+      <h1><span data-i18n="title"></span> <em data-i18n="titleSub"></em></h1>
+      <button id="start" class="primary" data-i18n="explore"></button>
+    </div>
+    <div class="intro-more">
     <p class="eyebrow" data-i18n="eyebrow"></p>
-    <h1><span data-i18n="title"></span> <em data-i18n="titleSub"></em></h1>
     <p class="intro-copy" data-i18n="introCopy"></p>
     <div class="stats">
       <div><strong>4</strong><small data-i18n="statTowers"></small></div>
@@ -33,8 +38,9 @@
       <div><strong>40,000<sup>*</sup></strong><small data-i18n="statMall"></small></div>
       <div><strong>8,000<sup>*</sup></strong><small data-i18n="statGreen"></small></div>
     </div>
-    <p class="stat-src">* <span data-i18n="statSrc"></span></p>
-    <button id="start" class="primary" data-i18n="explore"></button>
+    <p class="stat-src"><a id="stat-src" href="https://biograpi.ge/ka/news/hisni-presale-start" target="_blank" rel="noopener">* <span data-i18n="statSrc"></span></a></p>
+    <button type="button" id="intro-about" class="text-link" data-i18n="about"></button>
+    </div>
   </section>
 
   <nav id="crumbs" class="crumbs" hidden aria-label="Explorer"></nav>
@@ -50,7 +56,7 @@
   <aside id="place-card" class="place-card panel" hidden></aside>
 
   <aside class="layers panel" id="layers">
-    <button id="layers-toggle" class="panel-heading" aria-expanded="false" aria-controls="layer-options"><span data-i18n="layers"></span><span class="chev">+</span></button>
+    <button id="layers-toggle" class="panel-heading" aria-expanded="false" aria-controls="layer-options" aria-label="რუკის ფენები"><span class="layers-ico" aria-hidden="true"></span><span data-i18n="layers"></span></button>
     <div id="layer-options" hidden>
       <label><input type="checkbox" data-layer="buildings" checked /> <span data-i18n="lBuildings"></span></label>
       <label><input type="checkbox" data-layer="vegetation" checked /> <span data-i18n="lTrees"></span></label>
