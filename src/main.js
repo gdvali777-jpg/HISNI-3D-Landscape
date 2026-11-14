@@ -60,6 +60,20 @@ function matches(a, f = state.filters) {
   return true;
 }
 const filtersActive = () => { const f = state.filters; return f.kinds.size || f.statuses.size || ['areaMin', 'areaMax', 'floorMin', 'floorMax', 'priceMin', 'priceMax'].some((k) => f[k] !== ''); };
+const statusFilterOn = () => state.filters.statuses.size > 0;
+// Floor tiles count available apartments until a status chip is on; then they count the selected statuses.
+// Other Filters-panel constraints (type, area, price, floor) always apply, via the same `matches()`.
+function floorCount(blockId, floor) {
+  return state.doc.apartments.filter((a) => a.block === blockId && a.floor === floor && matches(a) && (statusFilterOn() || a.status === 'available')).length;
+}
+function filteredCount(apts) {
+  return statusFilterOn() ? apts.filter((a) => matches(a)).length : apts.length;
+}
+function floorCountLabel(n) {
+  if (!statusFilterOn()) return `${n} ${t('avail')}`;
+  const sts = [...state.filters.statuses];
+  return sts.length === 1 ? `${n} ${statusLabel(sts[0])}` : `${n} ${t('apartments')}`;
+}
 function announce(msg) { $('#announce').textContent = msg; }
 const towerName = (id) => `${t('block')} ${id}`;
 
@@ -100,7 +114,24 @@ function blockSource(id) { return blockOf(id)?.source; }
 const dmy = (d) => (d ? d.split('-').reverse().join('.') : '');
 function srcLabel(id) { const b = blockOf(id); return b?.source === 'bitrix24' ? `${t('bitrixData')} (snapshot, ${dmy(b.snapshot)})` : b?.source === 'biograpi.ge' ? `${t('siteData')} (snapshot, ${dmy(b.snapshot)})` : t('sample'); }
 function sourceNote(id) { const s = blockSource(id); return s === 'bitrix24' ? `${t('bitrixSrc')} (snapshot, ${dmy(blockOf(id).snapshot)}). ${t('listPrice')}` : s === 'biograpi.ge' ? `${t('siteSrc')} (snapshot, ${snapDate()})` : t('sampleNote'); }
-function legend(id) { const present = new Set(state.doc.apartments.filter((a) => a.block === id).map((a) => a.status)); const src = blockSource(id); return `<div class="legend">${STATUSES.filter((s) => present.has(s)).map((s) => `<span><i class="dot ${s}"></i>${statusLabel(s)}</span>`).join('')}${state.doc?.meta.live ? '' : `<span class="sample-badge ${src === 'sample' ? '' : 'site'}">${srcLabel(id)}</span>`}</div>`; }
+function legend(id) {
+  const present = new Set(state.doc.apartments.filter((a) => a.block === id).map((a) => a.status));
+  const src = blockSource(id);
+  const chips = STATUSES.filter((s) => present.has(s) || state.filters.statuses.has(s)).map((s) => {
+    const on = state.filters.statuses.has(s);
+    return `<button type="button" class="legend-chip ${s}" data-status="${s}" aria-pressed="${on}"><i class="dot ${s}" aria-hidden="true"></i>${statusLabel(s)}</button>`;
+  }).join('');
+  const badge = state.doc?.meta.live ? '' : `<span class="sample-badge ${src === 'sample' ? '' : 'site'}">${srcLabel(id)}</span>`;
+  return `<div class="legend" role="group" aria-label="${esc(t('status'))}">${chips}${badge}</div>`;
+}
+function toggleStatus(s) {
+  const set = state.filters.statuses;
+  if (set.has(s)) set.delete(s); else set.add(s);
+  renderExplorer();
+  recolor();
+  if (!$('#filters').hidden) renderFilters();
+  $(`#explorer [data-status="${s}"]`)?.focus();
+}
 
 function renderExplorer() {
   const el = $('#explorer'); if (!state.doc) return;
@@ -114,19 +145,22 @@ function renderExplorer() {
     const b = state.doc.blocks.find((x) => x.id === state.tower);
     if (!b.has_data) { el.innerHTML = `<p class="eyebrow">${towerName(b.id)}</p><h2>${towerName(b.id)} · ${b.floors} ${t('floorsN')}</h2><p>${t('noData')}</p><p class="note">${t('noDataHint')}</p><button class="primary small" data-tower="III">${towerName('III')} →</button>`; return; }
     const [f0, f1] = state.doc.meta.residential_floors; const floors = []; for (let f = f1; f >= f0; f--) floors.push(f);
-    const counts = (f) => state.doc.apartments.filter((a) => a.block === b.id && a.floor === f && a.status === 'available' && matches(a)).length;
-    el.innerHTML = `<p class="eyebrow">${towerName(b.id)}</p><h2>${t('chooseFloor')}</h2><p>${t('residentialFloors')} · ${state.doc.apartments.filter((a) => a.block === b.id).length} ${t('apartments')}</p>${legend(b.id)}
-      <div class="floor-grid" role="group" aria-label="${t('chooseFloor')}">${floors.map((f) => { const n = counts(f); return `<button data-floor="${f}" class="${n ? '' : 'none'}" aria-label="${t('floor')} ${f}, ${n} ${t('avail')}"><b>${f}</b><small>${n}</small></button>`; }).join('')}</div>
+    const blockApts = state.doc.apartments.filter((a) => a.block === b.id);
+    const sts = [...state.filters.statuses];
+    const countClass = !statusFilterOn() ? '' : sts.length === 1 ? `count-${sts[0]}` : 'count-mixed';
+    el.innerHTML = `<p class="eyebrow">${towerName(b.id)}</p><h2>${t('chooseFloor')}</h2><p>${t('residentialFloors')} · ${filteredCount(blockApts)} ${t('apartments')}</p>${legend(b.id)}
+      <div class="floor-grid ${countClass}" role="group" aria-label="${t('chooseFloor')}">${floors.map((f) => { const n = floorCount(b.id, f); return `<button data-floor="${f}" class="${n ? '' : 'none'}" aria-label="${esc(t('floor'))} ${f}, ${esc(floorCountLabel(n))}"><b>${f}</b><small>${n}</small></button>`; }).join('')}</div>
       <p class="note">${b.typical_floor_plan ? `<a href="${BASE}${b.typical_floor_plan}" target="_blank" rel="noopener">${t('typeL')} ↗</a> · ` : ''}${sourceNote(b.id)}</p>`;
   } else if (state.view === 'floor') {
     const apts = floorApts();
-    el.innerHTML = `<p class="eyebrow">${towerName(state.tower)} · ${t('floor')} ${state.floor}</p><h2>${t('onFloor')}: ${apts.length} ${t('apartments')}</h2><p>${t('selectApt')}</p>${legend(state.tower)}
+    el.innerHTML = `<p class="eyebrow">${towerName(state.tower)} · ${t('floor')} ${state.floor}</p><h2>${t('onFloor')}: ${filteredCount(apts)} ${t('apartments')}</h2><p>${t('selectApt')}</p>${legend(state.tower)}
       <ul class="apt-list">${apts.map((a) => `<li><button data-apt="${a.id}" ${a.id === state.apt ? 'aria-current="true"' : ''} style="${filtersActive() && !matches(a) ? 'opacity:.45' : ''}"><i class="dot ${a.status}"></i><span><b>№ ${a.number}</b> · ${kindLabel(a.type.kind)}<br/><span class="meta">${a.area} ${m2()} · ${statusLabel(a.status)}</span></span><span class="pr">${priceOf(a)}</span></button></li>`).join('')}</ul>
       <div class="floor-grid" style="margin-top:10px;grid-template-columns:repeat(2,1fr)">${state.floor < 36 ? `<button data-floor="${state.floor + 1}">↑ ${state.floor + 1}</button>` : '<span></span>'}${state.floor > 6 ? `<button data-floor="${state.floor - 1}">↓ ${state.floor - 1}</button>` : ''}</div>
       <p class="note">${t('schematicNote')} ${sourceNote(state.tower)}</p>`;
   }
 }
 $('#explorer').addEventListener('click', (e) => {
+  const sb = e.target.closest('[data-status]'); if (sb) { toggleStatus(sb.dataset.status); return; }
   const tb = e.target.closest('[data-tower]'); if (tb) return setView('block', { tower: tb.dataset.tower });
   const fb = e.target.closest('[data-floor]'); if (fb) { setView('floor', { floor: +fb.dataset.floor }); announce(`${t('floor')} ${fb.dataset.floor}`); return; }
   const ab = e.target.closest('[data-apt]'); if (ab) selectApt(ab.dataset.apt);
