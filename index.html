@@ -22,15 +22,57 @@
   <title>ჰისნი · Hisni by Biograpi — 3D</title>
   <link rel="icon" href="./brand/favicon.svg" type="image/svg+xml" />
   <link rel="preload" href="./fonts/pingl-400.woff2" as="font" type="font/woff2" crossorigin />
+  <script>
+    (function () {
+      var q = location.search;
+      if (!/(?:^|[?&])(?:view=render|mode=render)(?:&|$)/.test(q)) return;
+      document.documentElement.classList.add('boot-render');
+      var narrow = matchMedia('(max-width: 819px)').matches;
+      var l = document.createElement('link');
+      l.rel = 'preload'; l.as = 'image'; l.fetchPriority = 'high';
+      l.href = narrow ? './renders/view-07-720.webp' : './renders/view-07.webp';
+      document.head.appendChild(l);
+    })();
+  </script>
 </head>
 <body>
 <main id="app">
   <div id="viewport" role="region" tabindex="0" aria-label="3D view. Drag to orbit, scroll or pinch to zoom."></div>
+  <div id="render-view" hidden>
+    <div id="render-stage">
+      <img id="render-img" alt="" width="1243" height="1600" fetchpriority="high" />
+      <svg id="render-svg" aria-hidden="false"></svg>
+    </div>
+    <div class="render-vignette" aria-hidden="true"></div>
+    <p id="render-ph" class="render-ph" hidden>Placeholder</p>
+    <div id="render-tip" class="render-tip" hidden></div>
+    <div class="render-panel">
+      <div id="render-blocks" class="render-blocks" role="group"></div>
+      <form id="render-filters" class="render-filters"></form>
+    </div>
+    <div class="render-spin">
+      <button type="button" data-spin="-1" data-i18n-aria="spinPrev">‹</button>
+      <div id="render-dots" class="render-dots"></div>
+      <button type="button" data-spin="1" data-i18n-aria="spinNext">›</button>
+      <span id="render-frame-label" class="render-frame-label"></span>
+    </div>
+  </div>
+  <script>
+    if (document.documentElement.classList.contains('boot-render')) {
+      var view = document.getElementById('render-view');
+      var img = document.getElementById('render-img');
+      view.hidden = false;
+      var narrow = matchMedia('(max-width: 819px)').matches;
+      img.src = narrow ? './renders/view-07-720.webp' : './renders/view-07.webp';
+      img.alt = 'Hisni';
+    }
+  </script>
   <div id="labels"></div>
 
   <header class="header">
     <a class="brand" href="https://biograpi.ge/" target="_blank" rel="noopener"><img src="./brand/hisni-dark.webp" alt="Hisni by Biograpi" width="150" height="43" /></a>
     <div class="header-right">
+      <button id="view-toggle" class="chip" type="button" hidden></button>
       <button id="filter-open" class="chip" data-i18n="filters"></button>
       <button id="about-open" class="chip icon-i" type="button" aria-label="პროექტის შესახებ">i</button>
       <button id="lang" class="chip lang" aria-label="EN, ინგლისურზე გადართვა"></button>

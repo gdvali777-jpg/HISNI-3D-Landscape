@@ -2,6 +2,7 @@ import './style.css';
 import { t, getLang, setLang, STRINGS } from './i18n.js';
 import { loadApartments, submitLead, CONTACT } from './data/adapter.js';
 import { track } from './analytics.js';
+import { createRenderView } from './render-view.js';
 
 const BASE = import.meta.env.BASE_URL;
 const $ = (s, r = document) => r.querySelector(s);
@@ -30,6 +31,10 @@ const POIS = [
 POIS.forEach((p) => { if (p.min == null) p.min = Math.max(1, Math.round((p.m * 1.3) / 80)); });
 
 const state = { view: 'intro', tower: null, floor: null, apt: null, light: 'day', filters: null, scene: null, doc: null, planTab: '2d' };
+let renderMode = false;
+let renderApi = null;
+let ctxPromise = null;
+const wantsRender = (p) => p.get('view') === 'render' || p.get('mode') === 'render';
 const defaultFilters = () => ({ kinds: new Set(), statuses: new Set(), areaMin: '', areaMax: '', floorMin: '', floorMax: '', priceMin: '', priceMax: '' });
 state.filters = defaultFilters();
 
@@ -56,6 +61,9 @@ function applyI18n() {
   document.querySelectorAll('[data-call]').forEach((a) => { a.textContent = callLabel(a.dataset.call === 'form'); });
   paintIntro();
   renderLabels(); renderExplorer(); renderCard(); state.scene?.request(); if (!$('#filters').hidden) renderFilters();
+  renderApi?.refresh();
+  const toggle = $('#view-toggle');
+  if (toggle) { toggle.hidden = !app.classList.contains('render-armed'); toggle.textContent = renderMode ? t('view3d') : t('renderView'); toggle.setAttribute('aria-pressed', String(renderMode)); }
 }
 $('#lang').addEventListener('click', () => { setLang(getLang() === 'ka' ? 'en' : 'ka'); applyI18n(); track('language', { lang: getLang() }); });
 const INTRO_KEY = 'hisni-intro';
@@ -165,6 +173,7 @@ function urlForState() {
   if (getLang() === 'en') p.set('lang', 'en');
   if (bootQuery.get('webgl') === '0') p.set('webgl', '0');
   if (bootQuery.get('bg') === 'real') p.set('bg', 'real');
+  if (renderMode) { if (!p.get('view')) p.set('view', 'render'); else p.set('mode', 'render'); }
   const quality = bootQuery.get('quality'); if (quality) p.set('quality', quality);
   const light = bootQuery.get('light'); if (light) p.set('light', light);
   if (!$('#filters').hidden) p.set('filters', '1');
@@ -223,6 +232,9 @@ function applyHistoryUrl() {
   const p = new URLSearchParams(location.search);
   const lang = p.get('lang');
   if (lang === 'en' || lang === 'ka') { setLang(lang); applyI18n(); }
+  const want = wantsRender(p);
+  if (want && !renderMode) openRender();
+  if (!want && renderMode) { renderMode = false; app.classList.remove('is-render'); renderApi?.hide(); $('#view-toggle').textContent = t('renderView'); $('#view-toggle').setAttribute('aria-pressed', 'false'); }
   mapMode = p.get('view') === 'neighborhood' ? 'neighborhood' : null;
   state.apt = null;
   const view = p.get('view') || 'intro';
@@ -499,9 +511,9 @@ function readFilters() {
   filterLimit = 40;
 }
 let fT; let filterLimit = 40;
-$('#filters').addEventListener('input', () => { clearTimeout(fT); fT = setTimeout(() => { readFilters(); const foc = document.activeElement?.name; renderFilters(); if (foc) $(`#filters [name="${foc}"]`)?.focus(); renderExplorer(); recolor(); }, 250); });
+$('#filters').addEventListener('input', () => { clearTimeout(fT); fT = setTimeout(() => { readFilters(); const foc = document.activeElement?.name; renderFilters(); if (foc) $(`#filters [name="${foc}"]`)?.focus(); renderExplorer(); recolor(); renderApi?.refresh(); }, 250); });
 $('#filters').addEventListener('click', (e) => {
-  if (e.target.closest('[data-reset]')) { state.filters = defaultFilters(); filterLimit = 40; renderFilters(); renderExplorer(); recolor(); return; }
+  if (e.target.closest('[data-reset]')) { state.filters = defaultFilters(); filterLimit = 40; renderFilters(); renderExplorer(); recolor(); renderApi?.refresh(); return; }
   if (e.target.closest('[data-more]')) { filterLimit += 40; renderFilters(); return; }
   if (e.target.closest('[data-close]')) { showOnly(basePanel()); syncHistory(); return; }
   const ab = e.target.closest('[data-apt]'); if (ab) { showOnly(basePanel()); selectApt(ab.dataset.apt); }
@@ -663,6 +675,55 @@ function showHint() {
 // cheap capability check; real context creation failure is handled in boot()
 function hasWebGL() { return !!(window.WebGL2RenderingContext || window.WebGLRenderingContext); }
 
+function renderHooks() {
+  return {
+    t, lang: getLang, tel: () => CONTACT.tel, towerName, statusLabel,
+    apartments: () => state.doc.apartments,
+    blockIds: () => state.doc.blocks.map((b) => b.id),
+    block: blockOf,
+    freeCount, floorCount, floorCountLabel, matches, filtersActive,
+    filters: () => state.filters,
+    readFilters(fd) {
+      const f = state.filters;
+      f.kinds = new Set(fd.getAll('kind'));
+      f.statuses = new Set(fd.getAll('status'));
+      for (const k of ['areaMin', 'areaMax', 'floorMin', 'floorMax']) f[k] = String(fd.get(k) || '').replace(/[^\d.]/g, '');
+      renderExplorer(); recolor();
+      if (!$('#filters').hidden) renderFilters();
+    },
+    resetFilters() { state.filters = defaultFilters(); renderExplorer(); recolor(); if (!$('#filters').hidden) renderFilters(); },
+    onFloor(id, floor) { setView('floor', { tower: id, floor }); },
+    onSoon(id) { setView('block', { tower: id }); },
+  };
+}
+async function openRender() {
+  renderMode = true;
+  app.classList.add('is-render', 'render-armed');
+  $('#view-toggle').hidden = false;
+  $('#view-toggle').textContent = t('view3d');
+  $('#view-toggle').setAttribute('aria-pressed', 'true');
+  if (!renderApi) renderApi = await createRenderView(renderHooks());
+  await renderApi?.show();
+  $('#loading').classList.add('done');
+}
+async function leaveRender() {
+  renderMode = false;
+  app.classList.remove('is-render');
+  renderApi?.hide();
+  $('#view-toggle').textContent = t('renderView');
+  $('#view-toggle').setAttribute('aria-pressed', 'false');
+  if (!state.scene) {
+    const webgl = hasWebGL() && bootQuery.get('webgl') !== '0';
+    if (!webgl) startFallback();
+    else {
+      try { await start3D(bootQuery, ctxPromise); } catch (e) { console.warn('[hisni] 3D unavailable, falling back', e); $('#viewport').innerHTML = ''; startFallback(); }
+    }
+  }
+  showOnly(state.view === 'intro' ? 'intro' : 'explorer');
+  syncHistory();
+}
+$('#view-toggle')?.addEventListener('click', () => { if (renderMode) leaveRender(); else openRender().then(() => syncHistory()); });
+
 // ---------- boot ----------
 async function boot() {
   const params = new URLSearchParams(location.search);
@@ -670,10 +731,12 @@ async function boot() {
   const lang = params.get('lang');
   if (lang === 'en' || lang === 'ka') setLang(lang);
   applyI18n();
-  const ctxP = fetch(`${BASE}data/context.json`).then((r) => r.json());
+  ctxPromise = fetch(`${BASE}data/context.json`).then((r) => r.json());
   state.doc = await loadApartments(BASE);
   // Parse the landing URL before any history write. syncHistory used to replaceState
   // the overview while the query string was still unread, which wiped every deep link.
+  renderMode = wantsRender(params);
+  if (renderMode) app.classList.add('is-render', 'render-armed');
   applyDeepLink(params);
   seedHistory();
   renderShell();
@@ -682,12 +745,13 @@ async function boot() {
     history.replaceState({ hisni: histDepth }, '', urlForState());
   }
   window.__hisni = window.__hisni || { state };
-  track('page_view', { view: state.view, lang: getLang() });
+  track('page_view', { view: renderMode ? 'render' : state.view, lang: getLang() });
+  if (renderMode) { await openRender(); return; }
   const webgl = hasWebGL() && params.get('webgl') !== '0';
   if (!webgl) return startFallback();
   // let the UI paint first, then build the 3D scene
   await new Promise((r) => (window.requestIdleCallback ? requestIdleCallback(r, { timeout: 600 }) : setTimeout(r, 200)));
-  try { await start3D(params, ctxP); } catch (e) { console.warn('[hisni] 3D unavailable, falling back', e); $('#viewport').innerHTML = ''; startFallback(); }
+  try { await start3D(params, ctxPromise); } catch (e) { console.warn('[hisni] 3D unavailable, falling back', e); $('#viewport').innerHTML = ''; startFallback(); }
 }
 function startFallback() {
     app.classList.add('fallback'); $('#loading').classList.add('done');
