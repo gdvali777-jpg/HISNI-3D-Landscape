@@ -101,8 +101,17 @@ const kindLabel = (k) => t(k);
 const STATUSES = ['available', 'reserved', 'queue', 'sold', 'nfs'];
 const statusLabel = (s) => ({ available: t('avail'), reserved: t('reserved'), sold: t('sold'), nfs: t('nfs'), queue: t('queue') }[s] || s);
 const statusColorHex = { available: 0x8a9b48, reserved: 0xe2a54b, queue: 0x4f6fa8, sold: 0xb5524a, nfs: 0x9a9a9a };
-// NFS apartments: price is not shipped and never shown
-const priceOf = (a) => (a.status === 'nfs' ? '—' : fmtUsd(a.price_usd));
+// A dollar amount is shown only for available apartments and for waitlist rows that have a price.
+// Sold, reserved, and not-for-sale never show a price.
+const showsPrice = (a) => (a.status === 'available' || a.status === 'queue') && a.price_usd != null && a.price_usd !== '';
+const priceOf = (a) => {
+  if (showsPrice(a)) return fmtUsd(a.price_usd);
+  if (a.status === 'sold') return t('soldPrice');
+  if (a.status === 'reserved') return t('reservedPrice');
+  if (a.status === 'nfs') return t('nfs');
+  if (a.status === 'queue') return t('queue');
+  return '—';
+};
 const aptById = (id) => state.doc.apartments.find((a) => a.id === id);
 function matches(a, f = state.filters) {
   if (f.kinds.size && !f.kinds.has(a.type.kind)) return false;
@@ -110,7 +119,11 @@ function matches(a, f = state.filters) {
   const ar = a.area;
   if (f.areaMin !== '' && ar < +f.areaMin) return false; if (f.areaMax !== '' && ar > +f.areaMax) return false;
   if (f.floorMin !== '' && a.floor < +f.floorMin) return false; if (f.floorMax !== '' && a.floor > +f.floorMax) return false;
-  if (f.priceMin !== '' && (a.price_usd ?? 0) < +f.priceMin) return false; if (f.priceMax !== '' && (a.price_usd ?? Infinity) > +f.priceMax) return false;
+  if (f.priceMin !== '' || f.priceMax !== '') {
+    if (!showsPrice(a)) return false;
+    if (f.priceMin !== '' && a.price_usd < +f.priceMin) return false;
+    if (f.priceMax !== '' && a.price_usd > +f.priceMax) return false;
+  }
   return true;
 }
 const filtersActive = () => { const f = state.filters; return f.kinds.size || f.statuses.size || ['areaMin', 'areaMax', 'floorMin', 'floorMax', 'priceMin', 'priceMax'].some((k) => f[k] !== ''); };
@@ -273,7 +286,7 @@ function freeCount(id) { return state.doc.apartments.filter((a) => a.block === i
 function paintIntro() {
   const el = $('#intro-avail'); if (!el || !state.doc) return;
   const free = state.doc.apartments.filter((a) => a.status === 'available');
-  const prices = free.map((a) => a.price_usd).filter((n) => n != null && n > 0);
+  const prices = free.filter(showsPrice).map((a) => a.price_usd);
   const min = prices.length ? Math.min(...prices) : null;
   const from = min == null ? '' : (getLang() === 'ka' ? ` · ${fmtUsd(min)}-დან` : ` · from ${fmtUsd(min)}`);
   el.textContent = `${free.length} ${t('freeApts')}${from}`;
@@ -407,7 +420,7 @@ function renderCard() {
       <div><small>${t('area')}</small><b>${a.area} ${m2()}</b></div>
       <div><small>${t('rooms')}</small><b>${kindLabel(ty.kind)}</b></div>
       <div><small>${t('orientation')}</small><b>${a.facing ? orientLabel(a.facing) : '—'}</b></div>
-      ${a.status !== 'nfs' && a.price_per_m2_usd ? `<div><small>${t('price')}</small><b>${fmtUsd(a.price_per_m2_usd)} / ${m2()}</b></div>` : ''}
+      ${showsPrice(a) && a.price_per_m2_usd ? `<div><small>${t('price')}</small><b>${fmtUsd(a.price_per_m2_usd)} / ${m2()}</b></div>` : ''}
     </div>
     <p class="note">* ${t('schematicNote')} ${sourceNote(a.block)}</p>
     </div>
@@ -455,8 +468,9 @@ $('#apt-card').addEventListener('error', (e) => {
 // ---------- filters ----------
 function renderFilters() {
   const el = $('#filters'); const f = state.filters;
-  const rank = { available: 0, reserved: 1, queue: 2, sold: 3, nfs: 4 };
-  const res = state.doc.apartments.filter((a) => matches(a)).sort((x, y) => (rank[x.status] ?? 9) - (rank[y.status] ?? 9) || (x.price_usd ?? 1e12) - (y.price_usd ?? 1e12) || x.block.localeCompare(y.block) || x.floor - y.floor);
+  const rank = { available: 0, queue: 1, reserved: 2, sold: 3, nfs: 4 };
+  const priceKey = (a) => (showsPrice(a) ? Number(a.price_usd) : Number.POSITIVE_INFINITY);
+  const res = state.doc.apartments.filter((a) => matches(a)).sort((x, y) => priceKey(x) - priceKey(y) || (rank[x.status] ?? 9) - (rank[y.status] ?? 9) || x.block.localeCompare(y.block) || x.floor - y.floor);
   const kinds = ['studio', '1br', '2br'], sts = STATUSES;
   el.innerHTML = `<div class="sheet-head"><h2>${t('filters')}</h2><button class="x" data-close aria-label="${t('close')}">×</button></div>
     <form id="ff">
@@ -683,7 +697,7 @@ async function start3D(params, ctxP) {
       if (!tip) { tip = document.createElement('div'); tip.className = 'tooltip'; app.appendChild(tip); }
       if (!hit) { tip.hidden = true; if (state.view === 'towers') S.highlightTower(null); return; }
       tip.hidden = false; tip.style.left = e.clientX + 'px'; tip.style.top = e.clientY + 'px';
-      if (hit.kind === 'apt') { const a = aptById(hit.id); tip.textContent = `№ ${a.number} · ${kindLabel(a.type.kind)} · ${a.area} ${m2()} · ${statusLabel(a.status)}`; }
+      if (hit.kind === 'apt') { const a = aptById(hit.id); tip.textContent = `№ ${a.number} · ${kindLabel(a.type.kind)} · ${a.area} ${m2()} · ${priceOf(a)}`; }
       else { tip.textContent = towerName(hit.id); if (state.view === 'towers' || state.view === 'intro') S.highlightTower(hit.id); }
     },
   });

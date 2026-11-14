@@ -60,14 +60,15 @@ export async function applyLive(doc, url) {
   const byId = new Map(doc.apartments.map((a) => [a.id, a]));
   for (const r of rows) {
     const a = byId.get(r.id); if (!a) continue;
-    a.status = r.status; a.price_usd = r.price_usd; a.sample = false; a.source = 'live';
+    a.status = r.status; a.sample = false; a.source = 'live';
+    if (r.status === 'available' || r.status === 'queue') a.price_usd = r.price_usd;
+    else { delete a.price_usd; delete a.price_per_m2_usd; }
   }
   doc.meta.live = true;
 }
 
 // Lead stub. Never sends a deal id, and does not call any endpoint while LEAD.url is empty.
-// Open question (unchanged): sold apartments still show the catalog price when one is present;
-// NFS stays as an em dash. That display policy is not a decision.
+// Sold, reserved, and not-for-sale prices are not shown and are omitted from the client file.
 export async function submitLead(payload) {
   const body = {
     apartment_id: payload.apartment_id || '',
