@@ -603,7 +603,7 @@ function showPlace(p) {
 
 // ---------- controls ----------
 $('#start').addEventListener('click', () => setView('towers'));
-$('#layers-toggle').addEventListener('click', (e) => { const o = $('#layer-options'); o.hidden = !o.hidden; e.currentTarget.setAttribute('aria-expanded', String(!o.hidden)); e.currentTarget.querySelector('.chev').textContent = o.hidden ? '+' : '−'; });
+$('#layers-toggle').addEventListener('click', (e) => { const o = $('#layer-options'); o.hidden = !o.hidden; e.currentTarget.setAttribute('aria-expanded', String(!o.hidden)); });
 document.querySelectorAll('[data-layer]').forEach((i) => i.addEventListener('change', () => { if (i.dataset.layer === 'labels') app.classList.toggle('hide-labels', !i.checked); else state.scene?.setLayer(i.dataset.layer, i.checked); }));
 document.querySelectorAll('[data-light]').forEach((b) => b.addEventListener('click', () => setLight(b.dataset.light)));
 function setLight(m) { state.light = m; document.querySelectorAll('[data-light]').forEach((x) => { x.classList.toggle('active', x.dataset.light === m); x.setAttribute('aria-pressed', String(x.dataset.light === m)); }); app.classList.toggle('night', m === 'night'); state.scene?.setLight(m); }

@@ -747,6 +747,64 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         commit(o.it);
       }
     }
+    settleLabels();
+    function settleLabels() {
+      let topLimit = PAD;
+      for (const p of ui) {
+        if (p.r - p.l > w * 0.7 && p.t <= 8 && p.b < h * 0.5) topLimit = Math.max(topLimit, p.b + 4);
+      }
+      const nudge = (it, dy) => { it._sy += dy; clampItem(it); commit(it); };
+      for (const o of shown) {
+        const b = rectOf(o.it);
+        if (b.t < topLimit) nudge(o.it, topLimit - b.t);
+        else { clampItem(o.it); commit(o.it); }
+      }
+      for (let pass = 0; pass < 8; pass++) {
+        let moved = false;
+        for (const o of shown) {
+          if (o.it.isTower || o.it.el.style.opacity === '0') continue;
+          for (const t of shown) {
+            if (!t.it.isTower) continue;
+            const ovr = overlap(rectOf(o.it), rectOf(t.it));
+            if (!ovr) continue;
+            const down = rectOf(o.it);
+            down.t += ovr.ih + 6; down.b += ovr.ih + 6;
+            const hitsUi = ui.some((p) => overlap(down, p));
+            if (!hitsUi && down.b <= h - PAD) nudge(o.it, ovr.ih + 6);
+            else {
+              const side = rectOf(o.it);
+              const dx = (side.l + side.r) / 2 < w / 2 ? (ovr.iw + 8) : -(ovr.iw + 8);
+              o.it._lx += dx;
+              clampItem(o.it);
+              commit(o.it);
+            }
+            moved = true;
+          }
+        }
+        if (!moved) break;
+      }
+      const metro = shown.find((o) => o.it.el.classList.contains('metro'));
+      if (metro) {
+        metro.it.el.style.opacity = '';
+        metro.it.el.style.pointerEvents = '';
+        metro.it.el.setAttribute('aria-hidden', 'false');
+        let gapBottom = h - PAD;
+        for (const p of ui) if (p.t > topLimit + 8) gapBottom = Math.min(gapBottom, p.t - 6);
+        const box = rectOf(metro.it);
+        const covered = ui.some((p) => overlap(box, p)) || box.t < 0 || box.b > h - 2 || box.r < 8;
+        const lh = Math.max(44, box.b - box.t);
+        const placeAt = (top) => {
+          const off = Math.abs(metro.it._lx - metro.it._sx) > 1;
+          const y = top + lh;
+          metro.it._sy = off ? y + 14 + (metro.it._lift || 0) : y;
+          metro.it._lx = Math.min(w - 8 - (box.r - box.l) / 2, Math.max(8 + (box.r - box.l) / 2, w - 12 - (box.r - box.l) / 2));
+          commit(metro.it);
+        };
+        const towerBottom = Math.max(topLimit, ...shown.filter((o) => o.it.isTower).map((o) => rectOf(o.it).b));
+        if (covered && gapBottom - towerBottom >= lh) placeAt(towerBottom + 4);
+        else if (covered) placeAt(towerBottom + 4);
+      }
+    }
   }
 
   // render-on-demand loop

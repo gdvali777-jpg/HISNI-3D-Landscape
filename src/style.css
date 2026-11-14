@@ -21,7 +21,7 @@ button { cursor: pointer; }
 [hidden] { display: none !important; }
 #viewport { position: absolute; inset: 0; }
 #viewport canvas { display: block; touch-action: none; }
-#labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+#labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
 .panel { background: rgba(248,246,238,.94); backdrop-filter: blur(10px); border-radius: var(--r); box-shadow: var(--shadow); border: 1px solid rgba(255,255,255,.6); }
 .eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--small); margin: 0 0 6px; font-weight: 500; }
 .primary { background: var(--navy); color: var(--cream); border: 0; border-radius: 999px; min-height: 48px; padding: 0 22px; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; gap: 8px; transition: transform .15s, background .2s; }
@@ -62,7 +62,7 @@ button { cursor: pointer; }
 .stat-src { font-size: 12px; color: var(--small); margin: -4px 0 4px; }
 .stat-src a { display: inline-flex; align-items: center; min-height: 44px; }
 .stats small { font-size: 12px; color: var(--small); line-height: 1.2; display: block; }
-.intro-avail { margin: 0 0 8px; font-size: 15px; font-weight: 500; }
+.intro-avail { margin: 0 0 8px; font-size: 15px; font-weight: 500; min-height: 2.8em; }
 .intro .primary { width: 100%; }
 .intro-actions .primary { width: auto; flex: 1; min-width: 0; }
 .crumbs { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 54px); left: 12px; right: 12px; display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; z-index: 5; }
@@ -167,7 +167,7 @@ footer { position: absolute; right: 64px; bottom: 6px; font-size: 12px; color: v
 @media (max-width: 819px) { .label[data-pri='low'] { display: none; } .label button { font-size: 12px; } }
 .label button { border: 0; border-radius: 999px; background: rgba(248,246,238,.95); box-shadow: 0 4px 14px rgba(0,0,0,.18); min-height: 44px; padding: 0 12px 0 4px; display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .label i { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-style: normal; font-size: 11px; font-weight: 700; color: #fff; background: var(--navy); }
-.label.metro i { background: #c0392b; } .label.school i { background: #3b6fb6; } .label.bus i { background: #7d6cd6; } .label.health i { background: #2c9a7b; } .label.shop i, .label.bank i, .label.pharmacy i, .label.kinder i { background: #6b6470; }
+.label.metro { z-index: 5; } .label.metro i { background: #c0392b; } .label.school i { background: #3b6fb6; } .label.bus i { background: #7d6cd6; } .label.health i { background: #2c9a7b; } .label.shop i, .label.bank i, .label.pharmacy i, .label.kinder i { background: #6b6470; }
 .label::after { content: ''; position: absolute; left: 50%; top: 100%; width: 2px; height: var(--stem, 14px); margin-left: -1px; background: rgba(28,19,34,.5); }
 .night .label::after { background: rgba(239,235,212,.6); }
 .label:not(.tower)::before { content: ''; position: absolute; left: 50%; bottom: -3px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--navy); }
@@ -245,7 +245,9 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
 .floor-grid.count-mixed button small::before { background: var(--ink); }
 .night .label.tower button, .night .chip:not(.ghost):not(.lang) { box-shadow: 0 0 0 1px rgba(239,235,212,.55), 0 4px 14px rgba(0,0,0,.4); }
 @media (max-width: 819px) and (min-height: 521px) {
-  .hint { top: auto; bottom: calc(112px + env(safe-area-inset-bottom)); left: calc(8px + env(safe-area-inset-left)); right: calc(72px + env(safe-area-inset-right)); max-width: none; }
+  .hint { top: calc(max(8px, env(safe-area-inset-top)) + 52px); bottom: auto; left: calc(8px + env(safe-area-inset-left)); right: calc(8px + env(safe-area-inset-right)); max-width: none; padding: 2px 4px 2px 10px; }
+  .hint p { font-size: 12px; line-height: 1.25; }
+  .hint-x { width: 40px; height: 40px; }
 }
 @media (max-width: 819px) {
   .intro { left: calc(8px + env(safe-area-inset-left)); right: calc(72px + env(safe-area-inset-right)); bottom: calc(100px + env(safe-area-inset-bottom)); max-height: calc(100dvh - 156px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); height: auto; overflow: auto; padding: 4px 12px 6px; }
@@ -316,4 +318,16 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
   .layers .light button { padding: 0 6px; }
   footer { left: calc(8px + env(safe-area-inset-left)); right: auto; bottom: calc(4px + env(safe-area-inset-bottom)); z-index: 2; max-width: calc(36vw); font-size: 8px; white-space: nowrap; overflow: hidden; background: rgba(248,246,238,.92); padding: 0 6px; border-radius: 8px; }
   .layers { left: calc(36vw + 10px); }
+}
+@media (max-height: 420px) {
+  .apt-card.sheet { padding: 4px 10px 6px; }
+  .apt-card .sheet-head { align-items: center; gap: 4px; padding-bottom: 0; }
+  .apt-card .eyebrow { margin: 0; font-size: 11px; letter-spacing: 0; }
+  .apt-card h2 { font-size: 16px; line-height: 1.1; }
+  .apt-card .apt-price { font-size: 15px; }
+  .apt-card .apt-head-meta { flex-wrap: nowrap; gap: 6px; margin: 0; }
+  .apt-card .apt-body { max-height: none; flex: 1 1 0; min-height: 0; overflow: auto; }
+  .apt-card .plan { max-height: 52px; margin: 4px 0; }
+  .apt-card .facts { margin: 4px 0; gap: 4px 8px; }
+  .apt-card .cta-row { position: sticky; bottom: 0; flex: none; margin-top: auto; padding: 4px 0 0; z-index: 4; }
 }
