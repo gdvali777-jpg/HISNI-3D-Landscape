@@ -356,9 +356,10 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     ground.material.color.setHex(m === 'night' ? 0x3a3c44 : C.ground);
     shadowsDirty(); request();
     // WebKit may draw the requested frame before the new shaders finish compiling.
-    if (renderer.compileAsync) renderer.compileAsync(scene, camera).then(() => { shadowsDirty(); request(); }).catch(() => {});
+    // Repaint only — label layout is not part of the shader warmup.
+    if (renderer.compileAsync) renderer.compileAsync(scene, camera).then(() => { shadowsDirty(); requestPaint(); }).catch(() => {});
     let frames = 0;
-    const pump = () => { request(); if (++frames < 20) requestAnimationFrame(pump); };
+    const pump = () => { requestPaint(); if (++frames < 12) requestAnimationFrame(pump); };
     requestAnimationFrame(pump);
   }
 
@@ -390,20 +391,27 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     });
     return out;
   }
-  const LABEL_AVOID = '#intro, #explorer, .sheet, .layers, .tools, .place-card, .crumbs, .header';
+  const LABEL_AVOID = '#intro, #explorer, .sheet, .layers, .tools, .place-card, .crumbs, .header, .map-meta, footer';
   const hit = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
-  function updateLabels() {
+  function updateLabels(precise) {
     const w = container.clientWidth, h = container.clientHeight;
-    const tRects = towerRects(w, h); const placed = [];
+    const tRects = towerRects(w, h); const placed = []; const ui = [];
     const cr = container.getBoundingClientRect();
-    for (const el of document.querySelectorAll(LABEL_AVOID)) { if (el.hidden || el.offsetParent === null) continue; const r = el.getBoundingClientRect(); placed.push([r.left - cr.left, r.top - cr.top, r.right - cr.left, r.bottom - cr.top]); }
+    for (const el of document.querySelectorAll(LABEL_AVOID)) {
+      if (el.hidden || el.offsetParent === null) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) continue;
+      const box = [r.left - cr.left, r.top - cr.top, r.right - cr.left, r.bottom - cr.top];
+      placed.push(box);
+      ui.push({ l: box[0], t: box[1], r: box[2], b: box[3] });
+    }
     // read phase
     const items = labelItems.filter((it) => !it.el.hidden && it.el.style.display !== 'none').map((it) => {
       v3.copy(it.pos).project(camera);
       const sx = (v3.x * 0.5 + 0.5) * w, sy = (-v3.y * 0.5 + 0.5) * h;
       const onScreen = v3.z < 1 && Math.abs(v3.x) < 1.05 && Math.abs(v3.y) < 1.05;
       const near = v3.z < 1 && Math.abs(v3.x) < 1.8 && Math.abs(v3.y) < 1.8;
-      return { it, vis: (v3.z < 1 && it.isTower) || onScreen || (near && it.priority < 13), sx, sy, lw: it.el.offsetWidth, lh: (it.el.firstElementChild?.offsetHeight || 30) };
+      return { it, vis: (v3.z < 1 && it.isTower) || onScreen || (near && it.priority < 13), sx, sy, lw: it.el.offsetWidth, lh: it.el.offsetHeight || 30 };
     }).filter((o) => { if (o.lw > 0) return true; if (o.it.leader) o.it.leader.style.display = 'none'; return false; });
     // write phase: try positions above the anchor, then beside the blocking tower (leader line)
     for (const o of items) {
@@ -438,7 +446,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
           if (!show && it.priority < 13) { lx = clampX(o.sx); show = true; placed.push(rectAt(lx, 0)); }
         }
       }
-      it._sx = o.sx; it._lx = lx; it._sy = o.sy; it._lift = lift;
+      it._sx = o.sx; it._lx = lx; it._sy = o.sy; it._lift = lift; it._lw = o.lw; it._lh = o.lh;
       const off = Math.abs(lx - o.sx) > 1;
       it.el.style.setProperty('--stem', off ? '0px' : `${14 + lift}px`);
       it.el.style.transform = off ? `translate(-50%,-100%) translate(${lx}px,${o.sy - 14 - lift}px)` : `translate(-50%,-100%) translate(${o.sx}px,${o.sy}px)`;
@@ -451,140 +459,165 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         Object.assign(it.leader.style, { display: 'block', width: `${len}px`, transform: `translate(${o.sx}px,${o.sy}px) rotate(${Math.atan2(dy, dx)}rad)` });
       } else it.leader.style.display = 'none';
     }
+    // Positions after this point are math on the sizes read above. No further layout reads —
+    // getBoundingClientRect here used to force a reflow once per label per pass, every frame.
     const PAD = 12;
-    const boxOf = (el) => {
-      const r = el.getBoundingClientRect();
-      return { l: r.left - cr.left, t: r.top - cr.top, r: r.right - cr.left, b: r.bottom - cr.top };
+    const shown = items.filter((o) => o.it.el.style.opacity !== '0');
+    const rectOf = (it) => {
+      const off = Math.abs(it._lx - it._sx) > 1;
+      const y = off ? it._sy - 14 - it._lift : it._sy;
+      const l = it._lx - it._lw / 2, t = y - it._lh;
+      return { l, t, r: l + it._lw, b: t + it._lh };
     };
-    const reapply = (it) => {
+    const overlap = (a, b) => {
+      const iw = Math.min(a.r, b.r) - Math.max(a.l, b.l);
+      const ih = Math.min(a.b, b.b) - Math.max(a.t, b.t);
+      return iw > 2 && ih > 2 ? { iw, ih } : null;
+    };
+    const clampItem = (it) => {
+      const b = rectOf(it);
+      if (b.l < PAD) it._lx += PAD - b.l;
+      else if (b.r > w - PAD) it._lx += (w - PAD) - b.r;
+      if (b.t < PAD) it._sy += PAD - b.t;
+      else if (b.b > h - PAD) it._sy += (h - PAD) - b.b;
+    };
+    const pushUi = (it) => {
+      for (let n = 0; n < 8; n++) {
+        const b = rectOf(it);
+        let worst = null;
+        for (const p of ui) {
+          const o = overlap(b, p);
+          if (!o) continue;
+          const area = o.iw * o.ih;
+          if (!worst || area > worst.area) worst = { p, o, area };
+        }
+        if (!worst) break;
+        const { p, o } = worst;
+        if (o.iw < o.ih) it._lx += ((b.l + b.r) < (p.l + p.r) ? -1 : 1) * (o.iw + 6);
+        else it._sy += ((b.t + b.b) < (p.t + p.b) ? -1 : 1) * (o.ih + 6);
+        clampItem(it);
+      }
+    };
+    const separate = (passes) => {
+      for (let pass = 0; pass < passes; pass++) {
+        let changed = false;
+        for (let i = 0; i < shown.length; i++) {
+          for (let j = i + 1; j < shown.length; j++) {
+            const A = rectOf(shown[i].it), B = rectOf(shown[j].it);
+            const o = overlap(A, B);
+            if (!o) continue;
+            const moveJ = shown[j].it.priority >= shown[i].it.priority;
+            const mover = (moveJ ? shown[j] : shown[i]).it;
+            const stay = moveJ ? shown[i].it : shown[j].it;
+            const mine = moveJ ? B : A;
+            const other = moveJ ? A : B;
+            const towers = mover.isTower && stay.isTower;
+            if (towers) {
+              const dir = (mine.l + mine.r) >= (other.l + other.r) ? 1 : -1;
+              mover._lx += dir * (o.iw + 8);
+            } else {
+              const below = (mine.t + mine.b) >= (other.t + other.b);
+              const prevSy = mover._sy;
+              mover._sy += below ? o.ih + 8 : -(o.ih + 8);
+              clampItem(mover);
+              if (overlap(rectOf(mover), rectOf(stay))) {
+                mover._sy = prevSy;
+                const dir = (mine.l + mine.r) >= (other.l + other.r) ? 1 : -1;
+                mover._lx += dir * (o.iw + 8);
+              }
+            }
+            clampItem(mover);
+            changed = true;
+          }
+        }
+        if (!changed) break;
+      }
+    };
+    for (const o of shown) pushUi(o.it);
+    separate(8);
+    for (const o of shown) pushUi(o.it);
+    separate(4);
+    const commit = (it) => {
       const off = Math.abs(it._lx - it._sx) > 1;
       const y = off ? it._sy - 14 - it._lift : it._sy;
       it.el.style.setProperty('--stem', off ? '0px' : `${14 + it._lift}px`);
       it.el.style.transform = `translate(-50%,-100%) translate(${it._lx}px,${y}px)`;
       it.el.classList.toggle('offset', off);
+      if (it.leader) {
+        if (off && it.el.style.opacity !== '0') {
+          const dx = it._lx - it._sx, dy = y - it._sy, len = Math.hypot(dx, dy);
+          Object.assign(it.leader.style, { display: 'block', width: `${len}px`, transform: `translate(${it._sx}px,${it._sy}px) rotate(${Math.atan2(dy, dx)}rad)` });
+        } else it.leader.style.display = 'none';
+      }
     };
-    const shown = () => items.filter((o) => o.it.el.style.opacity !== '0');
-    const fitsX = (it, x, b) => {
-      const half = (b.r - b.l) / 2;
-      return x - half >= PAD && x + half <= w - PAD;
-    };
-    for (let pass = 0; pass < 24; pass++) {
-      let changed = false;
-      const list = shown();
-      for (let i = 0; i < list.length; i++) {
-        for (let j = i + 1; j < list.length; j++) {
-          const A = boxOf(list[i].it.el), B = boxOf(list[j].it.el);
-          const iw = Math.min(A.r, B.r) - Math.max(A.l, B.l);
-          const ih = Math.min(A.b, B.b) - Math.max(A.t, B.t);
-          if (iw <= 1 || ih <= 1) continue;
-          const moveJ = list[j].it.priority >= list[i].it.priority;
-          const mover = moveJ ? list[j] : list[i];
-          const other = moveJ ? A : B;
-          const mine = moveJ ? B : A;
-          const dir = (mine.l + mine.r) / 2 >= (other.l + other.r) / 2 ? 1 : -1;
-          const nextX = mover.it._lx + dir * (iw + 10);
-          const otherDir = -dir;
-          const otherIt = moveJ ? list[i].it : list[j].it;
-          const otherBox = moveJ ? A : B;
-          const otherNext = otherIt._lx + otherDir * (iw + 10);
-          if (iw <= ih && fitsX(mover.it, nextX, mine)) mover.it._lx = nextX;
-          else if (fitsX(otherIt, otherNext, otherBox)) otherIt._lx = otherNext;
-          else mover.it._sy -= ih + 14;
-          reapply(mover.it); reapply(otherIt);
-          changed = true;
+    for (const o of shown) commit(o.it);
+    // One settling pass reads real boxes. Skipped while the camera is moving so orbit
+    // frames stay on the math above and don't reflow the page.
+    if (precise) {
+      const live = () => shown.filter((o) => o.it.el.style.opacity !== '0').map((o) => {
+        const r = o.it.el.getBoundingClientRect();
+        return { it: o.it, l: r.left - cr.left, t: r.top - cr.top, r: r.right - cr.left, b: r.bottom - cr.top };
+      });
+      const fits = (b) => b.l >= PAD && b.t >= PAD && b.r <= w - PAD && b.b <= h - PAD;
+      for (let pass = 0; pass < 10; pass++) {
+        const boxes = live();
+        let acted = false;
+        pair: for (let i = 0; i < boxes.length; i++) {
+          for (let j = i + 1; j < boxes.length; j++) {
+            const o = overlap(boxes[i], boxes[j]);
+            if (!o) continue;
+            const bi = boxes[i], bj = boxes[j];
+            const moveJ = bj.it.priority >= bi.it.priority;
+            const mover = moveJ ? bj : bi;
+            const other = moveJ ? bi : bj;
+            const cands = mover.it.isTower && other.it.isTower
+              ? [[o.iw + 8, 0], [-(o.iw + 8), 0], [0, -(o.ih + 8)], [0, o.ih + 8]]
+              : [[0, o.ih + 8], [0, -(o.ih + 8)], [o.iw + 10, 0], [-(o.iw + 10), 0], [o.iw + 80, 0], [-(o.iw + 80), 0], [0, o.ih + 48], [0, -(o.ih + 48)]];
+            let placedOk = false;
+            for (const [dx, dy] of cands) {
+              const nb = { l: mover.l + dx, t: mover.t + dy, r: mover.r + dx, b: mover.b + dy };
+              if (!fits(nb)) continue;
+              if (ui.some((p) => overlap(nb, p))) continue;
+              if (boxes.some((b) => b.it !== mover.it && overlap(nb, b))) continue;
+              mover.it._lx += dx; mover.it._sy += dy; commit(mover.it); placedOk = true; acted = true; break;
+            }
+            if (!placedOk && !mover.it.isTower) {
+              const wdt = mover.r - mover.l, hgt = mover.b - mover.t;
+              let found = null;
+              scan: for (let y = PAD; y <= h - hgt - PAD; y += 24) {
+                for (let x = PAD; x <= w - wdt - PAD; x += 24) {
+                  const nb = { l: x, t: y, r: x + wdt, b: y + hgt };
+                  if (ui.some((p) => overlap(nb, p))) continue;
+                  if (boxes.some((b) => b.it !== mover.it && overlap(nb, b))) continue;
+                  found = [x - mover.l, y - mover.t]; break scan;
+                }
+              }
+              if (found) { mover.it._lx += found[0]; mover.it._sy += found[1]; commit(mover.it); }
+              else { mover.it.el.style.opacity = '0'; mover.it.el.style.pointerEvents = 'none'; if (mover.it.leader) mover.it.leader.style.display = 'none'; }
+              acted = true;
+            }
+            else if (!placedOk && mover.it.isTower && other.it.isTower) { mover.it._lx += (mover.l >= other.l ? 1 : -1) * (o.iw + 6); commit(mover.it); acted = true; }
+            break pair;
+          }
         }
-      }
-      for (const o of shown()) {
-        const b = boxOf(o.it.el);
-        let dx = 0, dy = 0;
-        if (b.l < PAD) dx = PAD - b.l;
-        else if (b.r > w - PAD) dx = (w - PAD) - b.r;
-        if (b.t < PAD) dy = PAD - b.t;
-        else if (b.b > h - PAD) dy = (h - PAD) - b.b;
-        if (dx || dy) { o.it._lx += dx; o.it._sy += dy; reapply(o.it); changed = true; }
-      }
-      if (!changed) break;
-    }
-    const towersOnScreen = () => shown().filter((o) => o.it.isTower).sort((a, b) => boxOf(a.it.el).l - boxOf(b.it.el).l);
-    for (let pass = 0; pass < 8; pass++) {
-      const towers = towersOnScreen();
-      let changed = false;
-      for (let i = 1; i < towers.length; i++) {
-        const A = boxOf(towers[i - 1].it.el), B = boxOf(towers[i].it.el);
-        const iw = Math.min(A.r, B.r) - Math.max(A.l, B.l);
-        const ih = Math.min(A.b, B.b) - Math.max(A.t, B.t);
-        if (iw <= 1 || ih <= 1) continue;
-        const need = iw + 8;
-        if (B.r + need <= w - PAD) towers[i].it._lx += need;
-        else if (A.l - need >= PAD) towers[i - 1].it._lx -= need;
-        else towers[i].it._sy -= (B.b - B.t) + 8;
-        reapply(towers[i].it); reapply(towers[i - 1].it);
-        changed = true;
-      }
-      if (!changed) break;
-    }
-    const ui = [];
-    for (const el of document.querySelectorAll('.header, #crumbs, #filter-open, #lang, #intro, #explorer, .sheet, .layers, .tools, .place-card')) {
-      if (!el || el.hidden || getComputedStyle(el).display === 'none') continue;
-      const r = el.getBoundingClientRect();
-      ui.push({ l: r.left - cr.left, t: r.top - cr.top, r: r.right - cr.left, b: r.bottom - cr.top });
-    }
-    const hitsUi = (b) => ui.some((p) => b.l < p.r - 2 && b.r > p.l + 2 && b.t < p.b - 2 && b.b > p.t + 2);
-    for (let pass = 0; pass < 10; pass++) {
-      let moved = false;
-      for (const o of shown()) {
-        const b = boxOf(o.it.el);
-        if (!hitsUi(b)) continue;
-        const below = ui.filter((p) => b.t < p.b && b.b > p.t && b.l < p.r && b.r > p.l);
-        const push = below.reduce((m, p) => Math.max(m, p.b - b.t + 6), 18);
-        o.it._sy += push;
-        reapply(o.it);
-        moved = true;
-      }
-      if (!moved) break;
-    }
-    for (const o of shown()) {
-      const b = boxOf(o.it.el);
-      let dx = 0, dy = 0;
-      if (b.l < PAD) dx = PAD - b.l;
-      else if (b.r > w - PAD) dx = (w - PAD) - b.r;
-      if (b.t < PAD) dy = PAD - b.t;
-      else if (b.b > h - PAD) dy = (h - PAD) - b.b;
-      if (dx || dy) { o.it._lx += dx; o.it._sy += dy; reapply(o.it); }
-    }
-    // Final separation. UI nudges and clamping can put the metro and school pills back on top of each other.
-    for (let pass = 0; pass < 20; pass++) {
-      const list = shown();
-      let changed = false;
-      for (let i = 0; i < list.length; i++) {
-        for (let j = i + 1; j < list.length; j++) {
-          const A = boxOf(list[i].it.el), B = boxOf(list[j].it.el);
-          const iw = Math.min(A.r, B.r) - Math.max(A.l, B.l);
-          const ih = Math.min(A.b, B.b) - Math.max(A.t, B.t);
-          if (iw <= 2 || ih <= 2) continue;
-          const moveJ = list[j].it.priority >= list[i].it.priority;
-          const mover = (moveJ ? list[j] : list[i]).it;
-          const mine = moveJ ? B : A;
-          const other = moveJ ? A : B;
-          const below = (mine.t + mine.b) / 2 >= (other.t + other.b) / 2;
-          mover._sy += below ? ih + 12 : -(ih + 12);
-          reapply(mover);
-          changed = true;
+        if (acted) continue;
+        for (const b of boxes) {
+          const p = ui.find((u) => overlap(b, u));
+          if (!p) continue;
+          const o = overlap(b, p);
+          const dx = o.iw <= o.ih ? ((b.l + b.r) < (p.l + p.r) ? -1 : 1) * (o.iw + 6) : 0;
+          const dy = dx ? 0 : ((b.t + b.b) < (p.t + p.b) ? -1 : 1) * (o.ih + 6);
+          b.it._lx += dx; b.it._sy += dy; commit(b.it); acted = true; break;
         }
+        if (!acted) break;
       }
-      if (!changed) break;
-    }
-    for (const o of shown()) {
-      const b = boxOf(o.it.el);
-      if (b.l < PAD) o.it._lx += PAD - b.l;
-      else if (b.r > w - PAD) o.it._lx += (w - PAD) - b.r;
-      reapply(o.it);
     }
   }
 
   // render-on-demand loop
-  let needs = true, anim = null, autoRotate = false;
-  function request() { needs = true; }
+  let needs = true, labelsDirty = true, anim = null, autoRotate = false;
+  function request() { needs = true; labelsDirty = true; }
+  function requestPaint() { needs = true; }
   let shadowNeeds = true; function shadowsDirty() { shadowNeeds = true; }
   controls.addEventListener('change', () => { clampTarget(); request(); });
   function clampTarget() { const t = controls.target; const r = Math.hypot(t.x, t.z); if (r > 520) { t.x *= 520 / r; t.z *= 520 / r; } t.y = THREE.MathUtils.clamp(t.y, 0, 150); }
@@ -592,15 +625,20 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
   function loop() {
     requestAnimationFrame(loop);
     const dt = clock.getDelta();
-    if (anim) { anim.t = Math.min(1, anim.t + dt / anim.dur); const k = anim.t < 0.5 ? 4 * anim.t ** 3 : 1 - (-2 * anim.t + 2) ** 3 / 2; camera.position.lerpVectors(anim.p0, anim.p1, k); controls.target.lerpVectors(anim.t0, anim.t1, k); if (anim.t >= 1) anim = null; needs = true; }
+    if (anim) { anim.t = Math.min(1, anim.t + dt / anim.dur); const k = anim.t < 0.5 ? 4 * anim.t ** 3 : 1 - (-2 * anim.t + 2) ** 3 / 2; camera.position.lerpVectors(anim.p0, anim.p1, k); controls.target.lerpVectors(anim.t0, anim.t1, k); if (anim.t >= 1) anim = null; needs = true; labelsDirty = true; }
     if (autoRotate) { controls.autoRotate = true; controls.autoRotateSpeed = 0.6; } else controls.autoRotate = false;
     const moved = controls.update(dt);
-    if (moved || needs || autoRotate) {
+    const moving = moved || !!anim || autoRotate;
+    if (moving || needs) {
       if (shadowNeeds && renderer.shadowMap.enabled) { renderer.shadowMap.needsUpdate = true; shadowNeeds = false; }
-      renderer.render(scene, camera); updateLabels(); needs = false;
+      renderer.render(scene, camera);
+      if (moving) { updateLabels(false); labelsDirty = true; }
+      else if (labelsDirty) { updateLabels(true); labelsDirty = false; }
+      needs = false;
       window.__hisniStats = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, dpr: renderer.getPixelRatio(), shadows: renderer.shadowMap.enabled };
-    }
+    } else if (labelsDirty) { updateLabels(true); labelsDirty = false; }
   }
+  document.fonts?.ready?.then(() => request());
   setLight('day');
   await step(0.95);
   if (renderer.compileAsync) { try { await renderer.compileAsync(scene, camera); } catch (e) {} }

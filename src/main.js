@@ -138,14 +138,21 @@ function showOnly(panel) {
   app.classList.toggle('side-sheet', panel === 'apt' || panel === 'filters');
 }
 let fromPop = false, seeded = false, pushed = 0, histDepth = 0, seedDepth = 0;
+let bootQuery = new URLSearchParams(typeof location === 'undefined' ? '' : location.search);
+let mapMode = null;
 function depthNow() { if (state.apt) return 4; return { intro: 0, towers: 1, block: 2, floor: 3 }[state.view] ?? 0; }
 function urlForState() {
   const p = new URLSearchParams();
-  if (state.view && state.view !== 'intro') p.set('view', state.view);
+  if (mapMode === 'neighborhood' && state.view === 'intro' && !state.apt) p.set('view', 'neighborhood');
+  else if (state.view && state.view !== 'intro') p.set('view', state.view);
   if (state.tower && (state.view === 'block' || state.view === 'floor' || state.apt)) p.set('tower', state.tower);
   if (state.view === 'floor' && state.floor != null) p.set('floor', String(state.floor));
   if (state.apt) p.set('apt', state.apt);
   if (getLang() === 'en') p.set('lang', 'en');
+  if (bootQuery.get('webgl') === '0') p.set('webgl', '0');
+  const quality = bootQuery.get('quality'); if (quality) p.set('quality', quality);
+  const light = bootQuery.get('light'); if (light) p.set('light', light);
+  if (!$('#filters').hidden) p.set('filters', '1');
   const q = p.toString();
   return location.pathname + (q ? `?${q}` : '');
 }
@@ -159,10 +166,48 @@ function syncHistory() {
   else if (here !== url) history.replaceState({ hisni: d }, '', url);
   histDepth = d;
 }
+function applyDeepLink(params) {
+  mapMode = params.get('view') === 'neighborhood' ? 'neighborhood' : null;
+  const aptId = params.get('apt');
+  if (aptId && aptById(aptId)) {
+    const a = aptById(aptId);
+    Object.assign(state, { view: 'floor', tower: a.block, floor: a.floor, apt: a.id });
+    return;
+  }
+  const v = params.get('view');
+  if (v === 'floor') Object.assign(state, { view: 'floor', tower: params.get('tower') || 'III', floor: +(params.get('floor') || 20), apt: null });
+  else if (v === 'block') Object.assign(state, { view: 'block', tower: params.get('tower') || 'III', floor: null, apt: null });
+  else if (v === 'towers') Object.assign(state, { view: 'towers', tower: null, floor: null, apt: null });
+  else Object.assign(state, { view: 'intro', tower: null, floor: null, apt: null });
+}
+// The landing entry becomes the overview. Each deeper level is pushed on top, so Back
+// from a deep link steps up one level instead of leaving the page.
+function seedHistory() {
+  const target = { view: state.view, tower: state.tower, floor: state.floor, apt: state.apt };
+  const d = depthNow();
+  const steps = [];
+  if (d >= 1) steps.push({ view: 'towers', tower: null, floor: null, apt: null });
+  if (d >= 2) steps.push({ view: 'block', tower: target.tower, floor: null, apt: null });
+  if (d >= 3) steps.push({ view: 'floor', tower: target.tower, floor: target.floor, apt: null });
+  if (d >= 4) steps.push({ view: 'floor', tower: target.tower, floor: target.floor, apt: target.apt });
+  state.view = 'intro'; state.tower = null; state.floor = null; state.apt = null;
+  history.replaceState({ hisni: 0 }, '', urlForState());
+  for (const step of steps) {
+    Object.assign(state, step);
+    history.pushState({ hisni: depthNow() }, '', urlForState());
+  }
+  Object.assign(state, target);
+  seeded = true; seedDepth = 0; histDepth = d; pushed = d;
+}
+function renderShell() {
+  if (state.apt && aptById(state.apt)) { renderCrumbs(); renderExplorer(); renderCard(); }
+  else { showOnly(state.view === 'intro' ? 'intro' : 'explorer'); renderCrumbs(); renderExplorer(); }
+}
 function applyHistoryUrl() {
   const p = new URLSearchParams(location.search);
   const lang = p.get('lang');
   if (lang === 'en' || lang === 'ka') { setLang(lang); applyI18n(); }
+  mapMode = p.get('view') === 'neighborhood' ? 'neighborhood' : null;
   state.apt = null;
   const view = p.get('view') || 'intro';
   if (p.get('apt')) selectApt(p.get('apt'));
@@ -170,6 +215,7 @@ function applyHistoryUrl() {
   else if (view === 'block') setView('block', { tower: p.get('tower') });
   else if (view === 'towers') setView('towers', { tower: null });
   else setView('intro', { tower: null, floor: null });
+  if (p.get('filters') === '1') { showOnly('filters'); renderFilters(); }
 }
 window.addEventListener('popstate', () => {
   fromPop = true;
@@ -183,7 +229,7 @@ function setView(v, opts = {}) {
   Object.assign(state, { view: v }, opts);
   const S = state.scene;
   if (S) {
-    if (v === 'intro') { S.clearFloor(); S.highlightTower(null); S.views.overview(); }
+    if (v === 'intro') { S.clearFloor(); S.highlightTower(null); if (mapMode === 'neighborhood') S.views.neighborhood(); else S.views.overview(); }
     if (v === 'towers') { S.clearFloor(); S.highlightTower(null); S.views.towers(); }
     if (v === 'block') { S.clearFloor(); S.highlightTower(state.tower); S.focusTower(state.tower); }
     if (v === 'floor') { S.highlightTower(null); S.buildFloor(state.tower, state.floor, floorApts(), (a) => statusColorHex[a.status] ?? 0x999999); recolor(); S.focusFloor(state.tower, state.floor); }
@@ -244,7 +290,7 @@ function renderExplorer() {
       <p class="note">${t('noDataHint')}</p>`;
   } else if (state.view === 'block') {
     const b = state.doc.blocks.find((x) => x.id === state.tower);
-    if (!b.has_data) { el.innerHTML = `<p class="eyebrow">${towerName(b.id)}</p><h2>${towerName(b.id)} · ${b.floors} ${t('floorsN')}</h2><p>${t('noData')}</p><p class="note">${t('noDataHint')}</p><button class="primary small" data-tower="III">${towerName('III')} →</button>`; return; }
+    if (!b.has_data) { el.innerHTML = `<p class="eyebrow">${towerName(b.id)}</p><h2>${towerName(b.id)} · ${b.floors} ${t('floorsN')}</h2><p>${t('noData')}</p><button class="primary small" data-tower="III">${towerName('III')} →</button>`; return; }
     const [f0, f1] = state.doc.meta.residential_floors; const floors = []; for (let f = f1; f >= f0; f--) floors.push(f);
     const blockApts = state.doc.apartments.filter((a) => a.block === b.id);
     const sts = [...state.filters.statuses];
@@ -281,9 +327,14 @@ function collapseSheet() {
   $('#explorer-handle')?.setAttribute('aria-expanded', 'false');
   $('#explorer-handle')?.setAttribute('aria-label', t('sheetExpand'));
 }
+function closeApt() {
+  if (!state.apt && $('#apt-card').hidden) return;
+  if (state.apt && pushed > 0) { history.back(); return; }
+  state.apt = null; renderCard(); renderExplorer(); recolor(); syncHistory();
+}
 function stepBack() {
-  if (!$('#apt-card').hidden) { if (pushed > 0) { history.back(); return; } state.apt = null; renderCard(); renderExplorer(); recolor(); return; }
-  if (!$('#filters').hidden || !$('#place-card').hidden) { showOnly(basePanel()); return; }
+  if (!$('#apt-card').hidden) { closeApt(); return; }
+  if (!$('#filters').hidden || !$('#place-card').hidden) { showOnly(basePanel()); syncHistory(); return; }
   if (pushed > 0) { history.back(); return; }
   if (state.view === 'floor') setView('block');
   else if (state.view === 'block') setView('towers', { tower: null });
@@ -340,7 +391,7 @@ function renderCard() {
     <div class="cta-row"><button class="primary accent" data-lead>${t('cta')}</button></div>`;
 }
 $('#apt-card').addEventListener('click', (e) => {
-  if (e.target.closest('[data-close]')) { state.apt = null; renderCard(); renderExplorer(); recolor(); return; }
+  if (e.target.closest('[data-close]')) { closeApt(); return; }
   const tab = e.target.closest('[data-tab]'); if (tab) { state.planTab = tab.dataset.tab; renderCard(); return; }
   if (e.target.closest('[data-lead]')) openLead(state.apt);
 });
@@ -373,7 +424,7 @@ let fT;
 $('#filters').addEventListener('input', () => { clearTimeout(fT); fT = setTimeout(() => { readFilters(); const foc = document.activeElement?.name; renderFilters(); if (foc) $(`#filters [name="${foc}"]`)?.focus(); renderExplorer(); recolor(); }, 250); });
 $('#filters').addEventListener('click', (e) => {
   if (e.target.closest('[data-reset]')) { state.filters = defaultFilters(); renderFilters(); renderExplorer(); recolor(); return; }
-  if (e.target.closest('[data-close]')) { showOnly(basePanel()); return; }
+  if (e.target.closest('[data-close]')) { showOnly(basePanel()); syncHistory(); return; }
   const ab = e.target.closest('[data-apt]'); if (ab) { showOnly(basePanel()); selectApt(ab.dataset.apt); }
 });
 $('#filter-open').addEventListener('click', () => {
@@ -483,7 +534,7 @@ $('#reset').addEventListener('touchend', onHome, { passive: false });
 $('#reset').addEventListener('pointerup', (e) => { if (e.pointerType === 'touch') return; onHome(e); });
 document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, dialog')) return;
-  if (e.key === 'Escape') { if (!$('#apt-card').hidden) { state.apt = null; renderCard(); recolor(); } else if (!$('#filters').hidden || !$('#place-card').hidden) showOnly(basePanel()); else if (state.view === 'floor') setView('block'); else if (state.view === 'block') setView('towers', { tower: null }); else if (state.view === 'towers') setView('intro'); }
+  if (e.key === 'Escape') { if (!$('#apt-card').hidden) closeApt(); else if (!$('#filters').hidden || !$('#place-card').hidden) { showOnly(basePanel()); syncHistory(); } else if (state.view === 'floor') setView('block'); else if (state.view === 'block') setView('towers', { tower: null }); else if (state.view === 'towers') setView('intro'); }
   if (e.key === 'Home') $('#reset').click();
   if (e.key === '+' || e.key === '=') state.scene?.zoom(0.8);
   if (e.key === '-') state.scene?.zoom(1.25);
@@ -500,11 +551,23 @@ function hasWebGL() { return !!(window.WebGL2RenderingContext || window.WebGLRen
 
 // ---------- boot ----------
 async function boot() {
+  const params = new URLSearchParams(location.search);
+  bootQuery = params;
+  const lang = params.get('lang');
+  if (lang === 'en' || lang === 'ka') setLang(lang);
   applyI18n();
   const ctxP = fetch(`${BASE}data/context.json`).then((r) => r.json());
   state.doc = await loadApartments(BASE);
-  if (!seeded) syncHistory();
-  const params = new URLSearchParams(location.search);
+  // Parse the landing URL before any history write. syncHistory used to replaceState
+  // the overview while the query string was still unread, which wiped every deep link.
+  applyDeepLink(params);
+  seedHistory();
+  renderShell();
+  if (params.get('filters') === '1') {
+    showOnly('filters'); renderFilters();
+    history.replaceState({ hisni: histDepth }, '', urlForState());
+  }
+  window.__hisni = window.__hisni || { state };
   const webgl = hasWebGL() && params.get('webgl') !== '0';
   if (!webgl) return startFallback();
   // let the UI paint first, then build the 3D scene
@@ -525,6 +588,11 @@ async function start3D(params, ctxP) {
     onProgress: (p) => { $('#loading i').style.width = Math.round(p * 100) + '%'; },
     weak,
     onPick: (hit) => {
+      if (state.apt) {
+        if (hit && hit.kind === 'apt') return selectApt(hit.id);
+        closeApt();
+        return;
+      }
       if (!hit) return;
       if (hit.kind === 'apt') return selectApt(hit.id);
       if (hit.kind === 'tower') { if (state.view === 'floor' && hit.id === state.tower) return; setView('block', { tower: hit.id }); }
@@ -543,13 +611,12 @@ async function start3D(params, ctxP) {
   S.controls.addEventListener('change', () => { needle.style.transform = `rotate(${(S.controls.getAzimuthalAngle() * 180) / Math.PI}deg)`; });
   setLight(params.get('light') || 'day');
   requestAnimationFrame(() => { $('#loading').classList.add('done'); showHint(); });
-  // deep links for screenshots / embedding: ?view=towers|block|floor&tower=III&floor=20&apt=B3-20-05
-  const v = params.get('view');
-  if (params.get('apt')) selectApt(params.get('apt'));
-  else if (v === 'floor') setView('floor', { tower: params.get('tower') || 'III', floor: +(params.get('floor') || 20) });
-  else if (v === 'block') setView('block', { tower: params.get('tower') || 'III' });
-  else if (v === 'towers') setView('towers');
-  else if (v === 'neighborhood') S.views.neighborhood();
-  if (params.get('filters') === '1') $('#filter-open').click();
+  // Camera follows the state parsed in boot(). fromPop keeps this from pushing another entry.
+  const prevPop = fromPop; fromPop = true;
+  if (state.apt) { setView('floor', { tower: state.tower, floor: state.floor, apt: state.apt }); renderCard(); }
+  else if (state.view !== 'intro') setView(state.view, { tower: state.tower, floor: state.floor });
+  else if (mapMode === 'neighborhood') S.views.neighborhood();
+  if (params.get('filters') === '1') { showOnly('filters'); renderFilters(); }
+  fromPop = prevPop;
 }
 boot();
