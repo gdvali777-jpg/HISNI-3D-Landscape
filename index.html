@@ -38,7 +38,13 @@
   </section>
 
   <nav id="crumbs" class="crumbs" hidden aria-label="Explorer"></nav>
-  <aside id="explorer" class="explorer panel" hidden aria-live="polite"></aside>
+  <aside id="explorer" class="explorer panel" hidden aria-live="polite">
+    <div class="explorer-bar">
+      <button type="button" id="explorer-handle" class="drag-handle" aria-expanded="true"></button>
+      <button type="button" id="explorer-close" class="x">×</button>
+    </div>
+    <div id="explorer-body" class="explorer-body"></div>
+  </aside>
   <aside id="apt-card" class="apt-card panel sheet" hidden aria-live="polite"></aside>
   <aside id="filters" class="filters panel sheet" hidden aria-label="Filters"></aside>
   <aside id="place-card" class="place-card panel" hidden></aside>

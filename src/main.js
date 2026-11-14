@@ -37,6 +37,10 @@ function applyI18n() {
   document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', `${el.textContent.trim()} ${t(el.dataset.i18nAria)}`); el.title = t(el.dataset.i18nAria); });
   $('#lang').textContent = t('lang');
+  const collapsed = $('#explorer').classList.contains('is-collapsed');
+  $('#explorer-close').setAttribute('aria-label', t('close'));
+  $('#explorer-close').title = t('close');
+  $('#explorer-handle').setAttribute('aria-label', t(collapsed ? 'sheetExpand' : 'sheetCollapse'));
   document.documentElement.lang = getLang();
   renderLabels(); renderExplorer(); renderCard(); state.scene?.request(); if (!$('#filters').hidden) renderFilters();
 }
@@ -79,6 +83,7 @@ const towerName = (id) => `${t('block')} ${id}`;
 
 // ---------- explorer ----------
 function setView(v, opts = {}) {
+  expandSheet();
   Object.assign(state, { view: v }, opts);
   $('#intro').hidden = v !== 'intro';
   $('#place-card').hidden = true;
@@ -134,9 +139,9 @@ function toggleStatus(s) {
 }
 
 function renderExplorer() {
-  const el = $('#explorer'); if (!state.doc) return;
-  el.hidden = state.view === 'intro';
-  if (el.hidden) return;
+  const el = $('#explorer-body'); if (!state.doc || !el) return;
+  $('#explorer').hidden = state.view === 'intro';
+  if ($('#explorer').hidden) return;
   if (state.view === 'towers') {
     el.innerHTML = `<p class="eyebrow">${t('towers')}</p><h2>${t('chooseTower')}</h2><p>${t('chooseTowerHint')}</p>
       <div class="tower-list">${state.doc.blocks.map((b) => `<button data-tower="${b.id}" class="${b.has_data ? 'has-data' : ''}"><strong>${b.id}</strong><small>${b.floors} ${t('floorsN')}</small></button>`).join('')}</div>
@@ -160,11 +165,58 @@ function renderExplorer() {
   }
 }
 $('#explorer').addEventListener('click', (e) => {
+  if (e.target.closest('#explorer-bar, #explorer-handle, #explorer-close')) return;
   const sb = e.target.closest('[data-status]'); if (sb) { toggleStatus(sb.dataset.status); return; }
   const tb = e.target.closest('[data-tower]'); if (tb) return setView('block', { tower: tb.dataset.tower });
   const fb = e.target.closest('[data-floor]'); if (fb) { setView('floor', { floor: +fb.dataset.floor }); announce(`${t('floor')} ${fb.dataset.floor}`); return; }
   const ab = e.target.closest('[data-apt]'); if (ab) selectApt(ab.dataset.apt);
 });
+
+function expandSheet() {
+  const el = $('#explorer');
+  el.classList.remove('is-collapsed');
+  $('#explorer-handle')?.setAttribute('aria-expanded', 'true');
+  $('#explorer-handle')?.setAttribute('aria-label', t('sheetCollapse'));
+}
+function collapseSheet() {
+  const el = $('#explorer');
+  if (el.hidden) return;
+  el.classList.add('is-collapsed');
+  $('#explorer-handle')?.setAttribute('aria-expanded', 'false');
+  $('#explorer-handle')?.setAttribute('aria-label', t('sheetExpand'));
+}
+function stepBack() {
+  if (!$('#apt-card').hidden) { state.apt = null; renderCard(); renderExplorer(); recolor(); expandSheet(); return; }
+  if (!$('#filters').hidden) { $('#filters').hidden = true; return; }
+  if (state.view === 'floor') setView('block');
+  else if (state.view === 'block') setView('towers', { tower: null });
+  else if (state.view === 'towers') setView('intro', { tower: null });
+  else expandSheet();
+}
+$('#explorer-close').addEventListener('click', (e) => { e.stopPropagation(); stepBack(); });
+// Swipe the grip to collapse; a tap (no travel) toggles. pointer events fire on iOS touch.
+{
+  const handle = $('#explorer-handle');
+  let py = null, moved = false;
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    py = e.clientY; moved = false;
+    handle.setPointerCapture?.(e.pointerId);
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (py == null) return;
+    if (Math.abs(e.clientY - py) > 8) moved = true;
+  });
+  handle.addEventListener('pointerup', (e) => {
+    if (py == null) return;
+    const dy = e.clientY - py;
+    py = null;
+    if (dy > 40) { moved = true; collapseSheet(); return; }
+    if (dy < -40) { moved = true; expandSheet(); return; }
+  });
+  handle.addEventListener('pointercancel', () => { py = null; });
+  handle.addEventListener('click', () => { if (moved) { moved = false; return; } $('#explorer').classList.contains('is-collapsed') ? expandSheet() : collapseSheet(); });
+}
 
 function selectApt(id, { fromList } = {}) {
   const a = aptById(id); if (!a) return;
@@ -301,7 +353,23 @@ function setLight(m) { state.light = m; document.querySelectorAll('[data-light]'
 $('#zoom-in').addEventListener('click', () => state.scene?.zoom(0.8));
 $('#zoom-out').addEventListener('click', () => state.scene?.zoom(1.25));
 $('#rotate').addEventListener('click', (e) => { const on = state.scene?.toggleRotate(); e.currentTarget.setAttribute('aria-pressed', String(!!on)); });
-$('#reset').addEventListener('click', () => { if (state.view === 'intro' || state.view === 'towers') state.scene?.views[state.view === 'intro' ? 'overview' : 'towers'](); else if (state.view === 'block') state.scene.focusTower(state.tower); else state.scene.focusFloor(state.tower, state.floor); });
+function goHome() {
+  state.apt = null;
+  $('#apt-card').hidden = true;
+  $('#filters').hidden = true;
+  $('#place-card').hidden = true;
+  setView('intro', { tower: null, floor: null });
+}
+// iOS Safari sometimes delivers pointerup without a click when another layer is near the button.
+let homeAt = 0;
+function onHome() {
+  const now = performance.now();
+  if (now - homeAt < 450) return;
+  homeAt = now;
+  goHome();
+}
+$('#reset').addEventListener('click', onHome);
+$('#reset').addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse' && e.button !== 0) return; onHome(); });
 document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, dialog')) return;
   if (e.key === 'Escape') { if (!$('#apt-card').hidden) { state.apt = null; renderCard(); recolor(); } else if (!$('#filters').hidden) $('#filters').hidden = true; else if (state.view === 'floor') setView('block'); else if (state.view === 'block') setView('towers', { tower: null }); else if (state.view === 'towers') setView('intro'); }
@@ -334,7 +402,7 @@ async function boot() {
 function startFallback() {
     app.classList.add('fallback'); $('#loading').classList.add('done');
     state.view = 'block'; state.tower = 'III'; $('#intro').hidden = true; renderCrumbs(); renderExplorer();
-    $('#explorer').insertAdjacentHTML('afterbegin', `<p class="placeholder">${t('webglOff')}</p><img class="fallback-plan" src="${BASE}plans/block3-typical-floor.webp" alt="${t('typeL')}" width="600" height="760"/>`);
+    $('#explorer-body').insertAdjacentHTML('afterbegin', `<p class="placeholder">${t('webglOff')}</p><img class="fallback-plan" src="${BASE}plans/block3-typical-floor.webp" alt="${t('typeL')}" width="600" height="760"/>`);
 }
 async function start3D(params, ctxP) {
   const weak = params.get('quality') === 'low' || (params.get('quality') !== 'high' && (matchMedia('(pointer: coarse)').matches || (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4));

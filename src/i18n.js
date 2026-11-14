@@ -34,6 +34,7 @@ export const STRINGS = {
     formTitle: 'მოთხოვნის გაგზავნა', formName: 'სახელი', formPhone: 'ტელეფონი', formApt: 'ბინა', formSubmit: 'გაგზავნა',
     formStub: 'დემო რეჟიმი: მოთხოვნა არ გაიგზავნა. ფორმა მოგვიანებით დაუკავშირდება Bitrix24-ს.',
     close: 'დახურვა', walk: 'წთ ფეხით', approx: 'მიახლოებით',
+    sheetCollapse: 'პანელის ჩაკეცვა', sheetExpand: 'პანელის გაშლა',
     descPending: '[დამატებითი აღწერითი ტექსტი — მოგვაწვდის თეკლა კიკნაძე]',
     aboutTitle: 'პროექტის შესახებ',
     aboutBody: [
@@ -84,6 +85,7 @@ export const STRINGS = {
     formTitle: 'Send a request', formName: 'Name', formPhone: 'Phone', formApt: 'Apartment', formSubmit: 'Send',
     formStub: 'Demo mode: nothing was sent. The form will be connected to Bitrix24 later.',
     close: 'Close', walk: 'min walk', approx: 'approx.',
+    sheetCollapse: 'Collapse panel', sheetExpand: 'Expand panel',
     descPending: '[Additional descriptive copy — to be provided by Tekla Kiknadze]',
     aboutTitle: 'About the Project',
     aboutBody: [
