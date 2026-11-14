@@ -42,9 +42,15 @@ button { cursor: pointer; }
 .intro.is-collapsed .intro-chev { transform: rotate(-135deg); margin-bottom: 0; margin-top: 6px; }
 .intro.is-collapsed .intro-more, .intro.is-collapsed h1 em { display: none; }
 .intro.is-collapsed { padding-bottom: 12px; }
+.intro-actions { display: flex; gap: 8px; align-items: center; }
+.intro-actions .primary { flex: 1; }
+.call-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 16px; border-radius: 999px; border: 1.5px solid var(--navy); background: #fff; color: var(--navy); text-decoration: none; font-weight: 500; white-space: nowrap; }
+.call-btn:hover { background: var(--primary); border-color: var(--primary); color: var(--navy); }
 .intro.is-collapsed .intro-keep { display: flex; align-items: center; gap: 10px; }
 .intro.is-collapsed h1 { font-size: 22px; margin: 0; flex: none; }
+.intro.is-collapsed .intro-actions { flex: 1; min-width: 0; }
 .intro.is-collapsed .primary { width: auto; flex: 1; margin: 0; min-height: 44px; }
+.intro.is-collapsed .call-btn { flex: none; min-height: 44px; padding: 0 12px; }
 .intro h1 { margin: 0 0 6px; font-size: 30px; line-height: 1; font-weight: 700; }
 .intro h1 em { display: block; font-style: normal; font-weight: 400; font-size: 17px; color: var(--primary-d); margin-top: 6px; }
 .intro-copy { margin: 0 0 12px; color: var(--muted); font-size: 14px; line-height: 1.4; }
@@ -56,6 +62,7 @@ button { cursor: pointer; }
 .stat-src a { display: inline-flex; align-items: center; min-height: 44px; }
 .stats small { font-size: 10.5px; color: var(--muted); line-height: 1.2; display: block; }
 .intro .primary { width: 100%; }
+.intro-actions .primary { width: auto; flex: 1; min-width: 0; }
 .crumbs { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 54px); left: 12px; right: 12px; display: flex; gap: 4px; flex-wrap: wrap; z-index: 5; }
 .crumbs button { min-height: 44px; border: 0; border-radius: 999px; background: rgba(248,246,238,.94); padding: 0 14px; font-size: 13px; box-shadow: var(--shadow); touch-action: manipulation; }
 .crumbs button[aria-current] { background: var(--navy); color: var(--cream); }
@@ -168,6 +175,8 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
 .placeholder { background: #fff6d6; border: 1px dashed #c9a44a; padding: 8px 10px; border-radius: 10px; font-size: 13px; color: #6b5310; }
 .lead form { display: grid; gap: 10px; } .lead label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); } .lead input { min-height: 48px; border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; font-size: 16px; color: var(--ink); background: #fff; }
 .lead .stub { background: #fde6dd; color: #8a3b22; padding: 10px 12px; border-radius: 12px; font-size: 13px; }
+.form-actions { display: flex; flex-wrap: wrap; gap: 8px; } .form-actions .primary { flex: 1; }
+.lead-result { display: grid; gap: 10px; padding: 4px 0 8px; } .lead-result h3 { margin: 0; } .lead-result p { margin: 0; } .lead-result .call-btn { background: var(--primary); border-color: var(--primary); }
 .tooltip { position: absolute; z-index: 7; pointer-events: none; background: var(--navy); color: var(--cream); padding: 6px 10px; border-radius: 10px; font-size: 12px; transform: translate(12px, 12px); }
 .fallback #viewport { display: none; } .fallback .tools, .fallback .layers, .fallback .map-meta, .fallback #labels { display: none; }
 .fallback { background: var(--paper); } .fallback .explorer { top: 120px; bottom: 12px; max-height: none; }
@@ -258,8 +267,9 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
   .intro { left: calc(8px + env(safe-area-inset-left)); right: auto; top: auto; bottom: calc(52px + env(safe-area-inset-bottom)); width: min(280px, 46vw); height: auto; max-height: calc(100dvh - 108px); overflow: auto; padding: 6px 12px 8px; display: flex; flex-direction: column; }
   .intro.is-collapsed { top: auto; height: auto; max-height: none; overflow: visible; padding-bottom: 8px; }
   .intro h1 { font-size: 22px; } .intro h1 em { font-size: 14px; margin-top: 2px; }
-  .intro .primary { margin-top: 8px; position: static; width: 100%; }
+  .intro .intro-actions .primary { margin-top: 0; position: static; width: auto; }
   .intro.is-collapsed .primary { width: auto; margin-top: 0; }
+  .intro.is-collapsed .call-btn { min-height: 44px; }
   .crumbs { top: calc(48px + env(safe-area-inset-top)); left: calc(8px + env(safe-area-inset-left)); right: auto; max-width: min(280px, 46vw); flex-wrap: nowrap; }
   .explorer { left: calc(8px + env(safe-area-inset-left)); right: auto; top: calc(96px + env(safe-area-inset-top)); bottom: calc(52px + env(safe-area-inset-bottom)); width: min(280px, 46vw); max-height: none; }
   .explorer h2 { font-size: 16px; margin: 0 0 2px; }

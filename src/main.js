@@ -1,6 +1,7 @@
 import './style.css';
 import { t, getLang, setLang, STRINGS } from './i18n.js';
-import { loadApartments, submitLead } from './data/adapter.js';
+import { loadApartments, submitLead, CONTACT } from './data/adapter.js';
+import { track } from './analytics.js';
 
 const BASE = import.meta.env.BASE_URL;
 const $ = (s, r = document) => r.querySelector(s);
@@ -47,9 +48,10 @@ function applyI18n() {
   $('#explorer-close').title = t('close');
   $('#explorer-handle').setAttribute('aria-label', t(collapsed ? 'sheetExpand' : 'sheetCollapse'));
   document.documentElement.lang = getLang();
+  document.querySelectorAll('[data-call]').forEach((a) => { a.textContent = callLabel(a.dataset.call === 'form'); });
   renderLabels(); renderExplorer(); renderCard(); state.scene?.request(); if (!$('#filters').hidden) renderFilters();
 }
-$('#lang').addEventListener('click', () => { setLang(getLang() === 'ka' ? 'en' : 'ka'); applyI18n(); });
+$('#lang').addEventListener('click', () => { setLang(getLang() === 'ka' ? 'en' : 'ka'); applyI18n(); track('language', { lang: getLang() }); });
 const INTRO_KEY = 'hisni-intro';
 function introCollapsedDefault() {
   const saved = sessionStorage.getItem(INTRO_KEY);
@@ -239,6 +241,7 @@ function setView(v, opts = {}) {
   renderCrumbs(); renderExplorer();
   const body = $('#explorer-body'); if (body) body.scrollTop = 0;
   syncHistory();
+  track('view_change', { view: state.view, tower: state.tower || '', floor: state.floor ?? '' });
 }
 const floorApts = () => state.doc.apartments.filter((a) => a.block === state.tower && a.floor === state.floor);
 function recolor() {
@@ -370,6 +373,7 @@ function selectApt(id, { fromList } = {}) {
   const a = aptById(id); if (!a) return;
   if (state.view !== 'floor' || state.floor !== a.floor || state.tower !== a.block) { state.apt = null; state.tower = a.block; setView('floor', { floor: a.floor }); }
   state.apt = id; renderCard(); renderExplorer(); recolor(); syncHistory(); announce(`№ ${a.number}`);
+  track('apartment_open', { apartment_id: id });
 }
 
 function renderCard() {
@@ -388,7 +392,7 @@ function renderCard() {
       <div><small>${t('price')}${srcBadge(a)}</small><b>${priceOf(a)}</b>${a.status !== 'nfs' && a.price_per_m2_usd ? `<small>${fmtUsd(a.price_per_m2_usd)} / ${m2()}</small>` : ''}</div>
     </div>
     <p class="note">* ${t('schematicNote')} ${sourceNote(a.block)}</p>
-    <div class="cta-row"><button class="primary accent" data-lead>${t('cta')}</button></div>`;
+    <div class="cta-row"><button class="primary accent" data-lead>${t('cta')}</button>${callLink('card')}</div>`;
 }
 $('#apt-card').addEventListener('click', (e) => {
   if (e.target.closest('[data-close]')) { closeApt(); return; }
@@ -433,15 +437,25 @@ $('#filter-open').addEventListener('click', () => {
 });
 
 // ---------- lead form (stub) ----------
+const callLabel = (withNumber) => (withNumber ? `${t('call')} · ${CONTACT.phone}` : t('call'));
+function callLink(place, withNumber = false) {
+  return `<a class="call-btn" href="${CONTACT.tel}" data-call="${place}">${esc(callLabel(withNumber))}</a>`;
+}
+function leadResult(sent) {
+  const title = sent ? t('formSentTitle') : t('formNotSentTitle');
+  const body = sent ? t('formSent') : t('formNotSent');
+  return `<div class="lead-result" role="status"><h3>${esc(title)}</h3><p>${esc(body)}</p>${callLink('form', true)}</div>`;
+}
 function openLead(id) {
   const a = aptById(id); const d = $('#lead');
+  track('lead_open', { apartment_id: a.id });
   d.innerHTML = `<div class="dlg lead"><div class="dlg-head"><h2>${t('formTitle')}</h2><button class="x" data-close aria-label="${t('close')}">×</button></div>
     <form method="dialog" id="lead-form">
       <label>${t('formApt')}<input name="apartment" value="${towerName(a.block)} · ${t('floor')} ${a.floor} · № ${a.number}" readonly /></label>
       <label>${t('formName')}<input name="name" autocomplete="name" required /></label>
       <label>${t('formPhone')}<input name="phone" type="tel" autocomplete="tel" inputmode="tel" required /></label>
       <p class="stub">${t('formStub')}</p>
-      <button class="primary accent" type="submit">${t('formSubmit')}</button>
+      <div class="form-actions"><button class="primary accent" type="submit">${t('formSubmit')}</button>${callLink('form', true)}</div>
     </form></div>`;
   d.showModal();
   d.querySelector('[data-close]').onclick = () => d.close();
@@ -449,11 +463,16 @@ function openLead(id) {
     e.preventDefault();
     const fd = Object.fromEntries(new FormData(e.target));
     const digits = String(fd.phone || '').replace(/\D/g, '');
-    if (digits.length < 9) { e.target.querySelector('.stub').textContent = t('formPhoneInvalid'); return; }
-    await submitLead({ ...fd, apartment_id: a.id });
-    e.target.outerHTML = `<p class="stub">${t('formThanks')}</p>`;
+    if (digits.length < 9) { e.target.querySelector('.stub').textContent = t('formPhoneInvalid'); track('lead_submit', { result: 'invalid', apartment_id: a.id }); return; }
+    const result = await submitLead({ name: fd.name, phone: fd.phone, apartment_id: a.id });
+    track('lead_submit', { result: result.ok ? 'ok' : (result.stub ? 'stub' : 'error'), apartment_id: a.id });
+    e.target.outerHTML = leadResult(result.ok);
   };
 }
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('[data-call]');
+  if (a) track('call_click', { place: a.dataset.call });
+});
 
 // ---------- about ----------
 function openAbout() {
@@ -568,6 +587,7 @@ async function boot() {
     history.replaceState({ hisni: histDepth }, '', urlForState());
   }
   window.__hisni = window.__hisni || { state };
+  track('page_view', { view: state.view, lang: getLang() });
   const webgl = hasWebGL() && params.get('webgl') !== '0';
   if (!webgl) return startFallback();
   // let the UI paint first, then build the 3D scene

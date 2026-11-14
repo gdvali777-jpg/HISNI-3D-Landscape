@@ -18,6 +18,18 @@ export const INVENTORY = {
   refreshMs: 60000,
 };
 
+// Public sales line. The number is the one published as a tel: link on biograpi.ge.
+export const CONTACT = {
+  phone: '0322 500 505',
+  tel: 'tel:0322500505',
+};
+
+// Lead delivery. Empty on purpose: the form never posts anywhere until a URL is set.
+// Do not put a webhook, token, or Bitrix endpoint here.
+export const LEAD = {
+  url: '',
+};
+
 // Placeholder mapping from Bitrix24 fields → demo schema. Field names MUST be confirmed
 // against the real Bitrix setup (smart-process / catalog / deal fields).
 const BITRIX_STATUS = { AVAILABLE: 'available', FREE: 'available', 'თავისუფალი': 'available', RESERVED: 'reserved', 'დაჯავშნილი': 'reserved', SOLD: 'sold', 'გაყიდული': 'sold', NFS: 'nfs', QUEUE: 'queue' };
@@ -53,8 +65,29 @@ export async function applyLive(doc, url) {
   doc.meta.live = true;
 }
 
-// CTA stub. Intentionally does NOT send anything anywhere.
+// Lead stub. Never sends a deal id, and does not call any endpoint while LEAD.url is empty.
+// Open question (unchanged): sold apartments still show the catalog price when one is present;
+// NFS stays as an em dash. That display policy is not a decision.
 export async function submitLead(payload) {
-  console.info('[hisni] lead form submit (stub, not sent):', payload);
-  return { ok: false, stub: true };
+  const body = {
+    apartment_id: payload.apartment_id || '',
+    name: payload.name || '',
+    phone: payload.phone || '',
+  };
+  if (!LEAD.url) {
+    console.info('[hisni] lead form not sent (LEAD.url empty)', { apartment_id: body.apartment_id });
+    return { ok: false, stub: true, reason: 'unconfigured' };
+  }
+  try {
+    const res = await fetch(LEAD.url, {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      credentials: 'omit',
+    });
+    if (!res.ok) return { ok: false, stub: false, reason: 'http' };
+    return { ok: true, stub: false };
+  } catch {
+    return { ok: false, stub: false, reason: 'network' };
+  }
 }
