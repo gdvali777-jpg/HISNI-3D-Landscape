@@ -11,7 +11,7 @@ const C = {
   glass: 0x30343a, ground: 0xe4e0d3, site: 0xd9d6c4, grass: 0xb9c592, road: 0xa7a49c, foot: 0xd2cdbf,
   primary: 0x8a9b48, secondary: 0xe78e75, navy: 0x1c1322,
 };
-export const STATUS_COLOR = { available: 0x8a9b48, reserved: 0xe2a54b, queue: 0xb7791f, sold: 0xb5524a, nfs: 0x9a9a9a, unknown: 0x9a9a9a };
+export const STATUS_COLOR = { available: 0x8a9b48, reserved: 0xe2a54b, queue: 0x4f6fa8, sold: 0xb5524a, nfs: 0x9a9a9a, unknown: 0x9a9a9a };
 
 const rand = (() => { let s = 1234567; return () => ((s = (s * 16807) % 2147483647) / 2147483647); })();
 
@@ -20,6 +20,26 @@ function canvasTex(w, h, draw, srgb = true) {
   draw(c.getContext('2d'), w, h);
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping;
   if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+}
+const statusMaps = {};
+function statusMap(status, hex) {
+  const key = `${status}:${hex}`;
+  if (statusMaps[key]) return statusMaps[key];
+  const tex = canvasTex(64, 64, (g) => {
+    g.fillStyle = `#${hex.toString(16).padStart(6, '0')}`;
+    g.fillRect(0, 0, 64, 64);
+    g.strokeStyle = 'rgba(28,19,34,.82)';
+    g.fillStyle = 'rgba(28,19,34,.88)';
+    g.lineWidth = 3;
+    if (status === 'reserved') { for (let y = 6; y < 64; y += 10) { g.beginPath(); g.moveTo(0, y); g.lineTo(64, y); g.stroke(); } }
+    else if (status === 'queue') { for (let i = -64; i < 64; i += 10) { g.beginPath(); g.moveTo(i, 64); g.lineTo(i + 64, 0); g.stroke(); } }
+    else if (status === 'sold') { g.lineWidth = 5; g.beginPath(); g.moveTo(14, 14); g.lineTo(50, 50); g.moveTo(50, 14); g.lineTo(14, 50); g.stroke(); }
+    else if (status === 'nfs') { g.setLineDash([4, 5]); g.strokeRect(10, 10, 44, 44); }
+    else { g.beginPath(); g.arc(32, 32, 9, 0, Math.PI * 2); g.fill(); }
+  });
+  tex.repeat.set(3, 2);
+  statusMaps[key] = tex;
+  return tex;
 }
 
 // 8×8 grid of window cells; one cell = one bay × one floor of a neighbouring building.
@@ -307,8 +327,9 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
       const pts = []; for (let i = 0; i <= n; i++) { const t = th0 + (th1 - th0) * i / n; pts.push([A * Math.cos(t), -B * Math.sin(t)]); }
       for (let i = n; i >= 0; i--) { const t = th0 + (th1 - th0) * i / n; pts.push([ai * Math.cos(t), -bi * Math.sin(t)]); }
       const geo = extrudeY(pts, y0 + 0.05, FLOOR_H * 0.62, { curveSegments: 1 });
-      const mat = new THREE.MeshStandardMaterial({ color: colorFor(a), roughness: 0.7, transparent: true, opacity: 0.93 });
-      const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.userData = { kind: 'apt', id: a.id, base: colorFor(a) };
+      const base = colorFor(a);
+      const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: statusMap(a.status, base), roughness: 0.7, transparent: true, opacity: 0.93 });
+      const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.userData = { kind: 'apt', id: a.id, status: a.status, base };
       floorGroup.add(m); aptMeshes.push(m);
     }
     // corridor ring floor
@@ -327,7 +348,8 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
   function recolorApts(colorFor, selectedId, dimIds) {
     for (const m of aptMeshes) {
       const a = m.userData.id; const base = colorFor(a);
-      m.material.color.setHex(base); m.userData.base = base;
+      m.material.color.setHex(0xffffff); m.userData.base = base;
+      m.material.map = statusMap(m.userData.status || 'unknown', base);
       m.material.opacity = dimIds && dimIds.has(a) ? 0.28 : 0.93;
       m.material.emissive.setHex(a === selectedId ? 0x553322 : 0x000000);
       m.scale.y = a === selectedId ? 1.25 : 1;
@@ -404,6 +426,12 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
       const box = [r.left - cr.left, r.top - cr.top, r.right - cr.left, r.bottom - cr.top];
       placed.push(box);
       ui.push({ l: box[0], t: box[1], r: box[2], b: box[3] });
+    }
+    const header = document.querySelector('.header');
+    if (header) {
+      const hb = header.getBoundingClientRect().bottom - cr.top + 8;
+      ui.push({ l: 0, t: 0, r: w, b: hb });
+      placed.push([0, 0, w, hb]);
     }
     // read phase
     const items = labelItems.filter((it) => !it.el.hidden && it.el.style.display !== 'none').map((it) => {
@@ -691,6 +719,15 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     renderer, camera, controls, setLight, views, focusTower, focusFloor, highlightTower, buildFloor, clearFloor, recolorApts, addLabel, request,
     setLayer(name, on) { if (name === 'labels') return; layers[name].visible = on; shadowsDirty(); request(); },
     zoom(f) { const d = camera.position.clone().sub(controls.target).multiplyScalar(f); if (d.length() > controls.minDistance && d.length() < controls.maxDistance) camera.position.copy(controls.target).add(d); request(); },
+    nudge(dTheta, dPhi) {
+      const offset = camera.position.clone().sub(controls.target);
+      const sph = new THREE.Spherical().setFromVector3(offset);
+      sph.theta += dTheta || 0;
+      sph.phi = THREE.MathUtils.clamp(sph.phi + (dPhi || 0), 0.25, Math.PI / 2 - 0.08);
+      offset.setFromSpherical(sph);
+      camera.position.copy(controls.target).add(offset);
+      request();
+    },
     toggleRotate() { autoRotate = !autoRotate; return autoRotate; },
     stats: () => ({ ...window.__hisniStats, neighbourTris: nb.tris, trees: tp.length }),
     towerLabelPos: (id) => towers.get(id).label,

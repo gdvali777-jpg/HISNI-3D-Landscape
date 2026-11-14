@@ -38,7 +38,9 @@ function applyI18n() {
   document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', `${el.textContent.trim()} ${t(el.dataset.i18nAria)}`); el.title = t(el.dataset.i18nAria); });
   $('#lang').textContent = t('lang');
-  $('#lang').setAttribute('aria-label', getLang() === 'ka' ? 'EN, English' : 'ქა, ქართული');
+  $('#lang').setAttribute('aria-label', getLang() === 'ka' ? 'EN, ინგლისურზე გადართვა' : 'ქა, Switch to Georgian');
+  $('#about-open')?.setAttribute('aria-label', t('about'));
+  $('#hint-ok')?.setAttribute('aria-label', t('close'));
   $('#layers-toggle')?.setAttribute('aria-label', t('layers'));
   refreshIntroToggle();
   const srcLink = document.querySelector('#stat-src');
@@ -49,6 +51,7 @@ function applyI18n() {
   $('#explorer-handle').setAttribute('aria-label', t(collapsed ? 'sheetExpand' : 'sheetCollapse'));
   document.documentElement.lang = getLang();
   document.querySelectorAll('[data-call]').forEach((a) => { a.textContent = callLabel(a.dataset.call === 'form'); });
+  paintIntro();
   renderLabels(); renderExplorer(); renderCard(); state.scene?.request(); if (!$('#filters').hidden) renderFilters();
 }
 $('#lang').addEventListener('click', () => { setLang(getLang() === 'ka' ? 'en' : 'ka'); applyI18n(); track('language', { lang: getLang() }); });
@@ -97,7 +100,7 @@ applyIntroCollapsed(introCollapsedDefault(), false);
 const kindLabel = (k) => t(k);
 const STATUSES = ['available', 'reserved', 'queue', 'sold', 'nfs'];
 const statusLabel = (s) => ({ available: t('avail'), reserved: t('reserved'), sold: t('sold'), nfs: t('nfs'), queue: t('queue') }[s] || s);
-const statusColorHex = { available: 0x8a9b48, reserved: 0xe2a54b, queue: 0xb7791f, sold: 0xb5524a, nfs: 0x9a9a9a };
+const statusColorHex = { available: 0x8a9b48, reserved: 0xe2a54b, queue: 0x4f6fa8, sold: 0xb5524a, nfs: 0x9a9a9a };
 // NFS apartments: price is not shipped and never shown
 const priceOf = (a) => (a.status === 'nfs' ? '—' : fmtUsd(a.price_usd));
 const aptById = (id) => state.doc.apartments.find((a) => a.id === id);
@@ -202,6 +205,7 @@ function seedHistory() {
   seeded = true; seedDepth = 0; histDepth = d; pushed = d;
 }
 function renderShell() {
+  paintIntro();
   if (state.apt && aptById(state.apt)) { renderCrumbs(); renderExplorer(); renderCard(); }
   else { showOnly(state.view === 'intro' ? 'intro' : 'explorer'); renderCrumbs(); renderExplorer(); }
 }
@@ -263,8 +267,17 @@ $('#crumbs').addEventListener('click', (e) => { const b = e.target.closest('[dat
 function blockOf(id) { return state.doc.blocks.find((x) => x.id === id); }
 function blockSource(id) { return blockOf(id)?.source; }
 const dmy = (d) => (d ? d.split('-').reverse().join('.') : '');
-function srcLabel(id) { const b = blockOf(id); const d = dmy(b?.snapshot) || snapDate(); return d ? `${t('updated')} ${d}` : (b?.source ? '' : t('sample')); }
-function sourceNote(id) { const b = blockOf(id); if (!b?.source) return t('sampleNote'); const note = srcLabel(id); return note ? `${note}. ${t('listPrice')}` : t('listPrice'); }
+function srcLabel(id) { const b = blockOf(id); const d = dmy(b?.snapshot) || snapDate(); return d ? `${t('priceUpdated')} ${d}` : (b?.source ? '' : t('sample')); }
+function sourceNote(id) { const b = blockOf(id); if (!b?.source) return t('sampleNote'); return srcLabel(id); }
+function freeCount(id) { return state.doc.apartments.filter((a) => a.block === id && a.status === 'available').length; }
+function paintIntro() {
+  const el = $('#intro-avail'); if (!el || !state.doc) return;
+  const free = state.doc.apartments.filter((a) => a.status === 'available');
+  const prices = free.map((a) => a.price_usd).filter((n) => n != null && n > 0);
+  const min = prices.length ? Math.min(...prices) : null;
+  const from = min == null ? '' : (getLang() === 'ka' ? ` · ${fmtUsd(min)}-დან` : ` · from ${fmtUsd(min)}`);
+  el.textContent = `${free.length} ${t('freeApts')}${from}`;
+}
 function legend(id) {
   const present = new Set(state.doc.apartments.filter((a) => a.block === id).map((a) => a.status));
   const src = blockSource(id);
@@ -289,8 +302,8 @@ function renderExplorer() {
   if (state.view === 'intro') { el.innerHTML = ''; return; }
   if (state.view === 'towers') {
     el.innerHTML = `<p class="eyebrow">${t('towers')}</p><h2>${t('chooseTower')}</h2><p>${t('chooseTowerHint')}</p>
-      <div class="tower-list">${state.doc.blocks.map((b) => `<button data-tower="${b.id}" class="${b.has_data ? 'has-data' : ''}"><strong>${b.id}</strong><small>${b.floors} ${t('floorsN')}</small></button>`).join('')}</div>
-      <p class="note">${t('noDataHint')}</p>`;
+      <div class="tower-list">${state.doc.blocks.map((b) => `<button data-tower="${b.id}" class="${b.has_data ? 'has-data' : 'is-soon'}"><strong>${b.id}</strong><small>${b.has_data ? `${freeCount(b.id)} ${t('avail')}` : t('soon')}</small></button>`).join('')}</div>
+      <p class="note">${t('labelKey')}</p>`;
   } else if (state.view === 'block') {
     const b = state.doc.blocks.find((x) => x.id === state.tower);
     if (!b.has_data) { el.innerHTML = `<p class="eyebrow">${towerName(b.id)}</p><h2>${towerName(b.id)} · ${b.floors} ${t('floorsN')}</h2><p>${t('noData')}</p><button class="primary small" data-tower="III">${towerName('III')} →</button>`; return; }
@@ -376,34 +389,74 @@ function selectApt(id, { fromList } = {}) {
   track('apartment_open', { apartment_id: id });
 }
 
+function aptActions(a) {
+  if (a.status === 'available') return `<button class="primary accent" data-lead>${t('cta')}</button>${callLink('card')}`;
+  if (a.status === 'reserved' || a.status === 'queue') return `<button class="btn-ghost" data-similar>${t('similarFree')}</button><button class="primary accent" data-notify>${t('notifyMe')}</button>`;
+  return `<button class="primary" data-similar>${t('similarFree')}</button>`;
+}
 function renderCard() {
   const el = $('#apt-card'); const a = state.apt && aptById(state.apt);
   if (!a) { if (!$('#apt-card').hidden) showOnly(basePanel()); return; }
   showOnly('apt');
   const ty = a.type; const tab = !ty.plan_2d ? '3d' : !ty.plan_3d ? '2d' : state.planTab; const img = tab === '3d' ? ty.plan_3d : ty.plan_2d; const src = /^https?:/.test(img) ? img : BASE + img;
-  el.innerHTML = `<div class="sheet-head"><div><p class="eyebrow">${towerName(a.block)} · ${t('floor')} ${a.floor}</p><h2>${t('apartment')} № ${a.number}</h2></div><button class="x" data-close aria-label="${t('close')}">×</button></div>
+  el.innerHTML = `<div class="sheet-head"><div><p class="eyebrow">${towerName(a.block)} · ${t('floor')} ${a.floor}</p><h2>${t('apartment')} № ${a.number}</h2><p class="apt-head-meta"><b class="apt-price">${priceOf(a)}</b><span class="status-pill"><i class="dot ${a.status}"></i>${statusLabel(a.status)}</span></p></div><div class="head-actions"><button class="x" data-copy type="button" aria-label="${t('copyLink')}"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 7a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3h-2v2a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-7a3 3 0 0 1 3-3h2V7Zm2 2v2H6a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1h-3V9Zm2-2a1 1 0 0 0-1 1v7h3a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2Z"/></svg></button><button class="x" data-close aria-label="${t('close')}">×</button></div></div>
+    <div class="apt-body">
     <div class="tabs" role="group">${ty.plan_2d ? `<button data-tab="2d" aria-pressed="${tab === '2d'}">${t('plan2d')}</button>` : ''}${ty.plan_3d ? `<button data-tab="3d" aria-pressed="${tab === '3d'}">${t('plan3d')}</button>` : ''}</div>
-    <div class="plan"><img src="${src}" alt="${t('typeL')} ${typeCode(ty)}, ${kindLabel(ty.kind)}, ${a.area} ${m2()}" loading="lazy" referrerpolicy="no-referrer" /></div>
+    <div class="plan"><img src="${src}" alt="${kindLabel(ty.kind)}, ${a.area} ${m2()}" loading="lazy" referrerpolicy="no-referrer" /></div>
     <div class="facts">
       <div><small>${t('area')}</small><b>${a.area} ${m2()}</b></div>
       <div><small>${t('rooms')}</small><b>${kindLabel(ty.kind)}</b></div>
       <div><small>${t('orientation')}</small><b>${a.facing ? orientLabel(a.facing) : '—'}</b></div>
-      <div><small>${t('status')}${srcBadge(a)}</small><b class="status-pill"><i class="dot ${a.status}"></i>${statusLabel(a.status)}</b></div>
-      <div><small>${t('price')}${srcBadge(a)}</small><b>${priceOf(a)}</b>${a.status !== 'nfs' && a.price_per_m2_usd ? `<small>${fmtUsd(a.price_per_m2_usd)} / ${m2()}</small>` : ''}</div>
+      ${a.status !== 'nfs' && a.price_per_m2_usd ? `<div><small>${t('price')}</small><b>${fmtUsd(a.price_per_m2_usd)} / ${m2()}</b></div>` : ''}
     </div>
     <p class="note">* ${t('schematicNote')} ${sourceNote(a.block)}</p>
-    <div class="cta-row"><button class="primary accent" data-lead>${t('cta')}</button>${callLink('card')}</div>`;
+    </div>
+    <div class="cta-row">${aptActions(a)}</div>`;
+}
+function showSimilar(a) {
+  state.filters = defaultFilters();
+  state.filters.statuses = new Set(['available']);
+  if (a?.type?.kind) state.filters.kinds = new Set([a.type.kind]);
+  filterLimit = 40;
+  state.apt = null;
+  showOnly('filters');
+  renderFilters();
+  renderExplorer();
+  recolor();
+  syncHistory();
+  announce(t('similarFree'));
+}
+async function copyLink() {
+  const url = location.href;
+  try { await navigator.clipboard.writeText(url); }
+  catch { const ta = document.createElement('textarea'); ta.value = url; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+  announce(t('linkCopied'));
+  track('copy_link', { view: state.view });
 }
 $('#apt-card').addEventListener('click', (e) => {
   if (e.target.closest('[data-close]')) { closeApt(); return; }
+  if (e.target.closest('[data-copy]')) { copyLink(); return; }
+  if (e.target.closest('[data-similar]')) { const a = aptById(state.apt); showSimilar(a); return; }
+  if (e.target.closest('[data-notify]')) { openLead(state.apt, { notify: true }); return; }
   const tab = e.target.closest('[data-tab]'); if (tab) { state.planTab = tab.dataset.tab; renderCard(); return; }
   if (e.target.closest('[data-lead]')) openLead(state.apt);
 });
+$('#apt-card').addEventListener('error', (e) => {
+  const img = e.target;
+  if (img?.tagName !== 'IMG' || img.dataset.broken) return;
+  img.dataset.broken = '1';
+  const box = document.createElement('div');
+  box.className = 'plan-fallback';
+  box.setAttribute('role', 'status');
+  box.textContent = t('planError');
+  img.replaceWith(box);
+}, true);
 
 // ---------- filters ----------
 function renderFilters() {
   const el = $('#filters'); const f = state.filters;
-  const res = state.doc.apartments.filter((a) => matches(a)).sort((x, y) => x.block.localeCompare(y.block) || x.floor - y.floor || x.number - y.number);
+  const rank = { available: 0, reserved: 1, queue: 2, sold: 3, nfs: 4 };
+  const res = state.doc.apartments.filter((a) => matches(a)).sort((x, y) => (rank[x.status] ?? 9) - (rank[y.status] ?? 9) || (x.price_usd ?? 1e12) - (y.price_usd ?? 1e12) || x.block.localeCompare(y.block) || x.floor - y.floor);
   const kinds = ['studio', '1br', '2br'], sts = STATUSES;
   el.innerHTML = `<div class="sheet-head"><h2>${t('filters')}</h2><button class="x" data-close aria-label="${t('close')}">×</button></div>
     <form id="ff">
@@ -414,25 +467,27 @@ function renderFilters() {
       <fieldset><legend>${t('priceRange')}</legend><div class="range"><input name="priceMin" inputmode="numeric" placeholder="${t('min')}" value="${f.priceMin}" aria-label="${t('priceRange')} min"/><input name="priceMax" inputmode="numeric" placeholder="${t('max')}" value="${f.priceMax}" aria-label="${t('priceRange')} max"/></div></fieldset>
     </form>
     <p><b>${res.length}</b> ${t('results')}</p>
-    <ul class="apt-list results" aria-label="${t('list')}">${res.slice(0, 40).map((a) => `<li><button data-apt="${a.id}"><i class="dot ${a.status}"></i><span><b>№ ${a.number}</b> · ${towerName(a.block)} · ${t('floor')} ${a.floor}<br/><span class="meta">${kindLabel(a.type.kind)} · ${a.area} ${m2()}</span></span><span class="pr">${priceOf(a)}</span></button></li>`).join('') || `<li>${t('noResults')}</li>`}</ul>
-    ${res.length > 40 ? `<p class="note">+${res.length - 40}…</p>` : ''}
-    <p class="note">${t('updated')} ${snapDate()}. ${t('listPrice')}</p>
+    <ul class="apt-list results" aria-label="${t('list')}">${res.slice(0, filterLimit).map((a) => `<li><button data-apt="${a.id}"><i class="dot ${a.status}"></i><span><b>№ ${a.number}</b> · ${towerName(a.block)} · ${t('floor')} ${a.floor}<br/><span class="meta">${kindLabel(a.type.kind)} · ${a.area} ${m2()}</span></span><span class="pr">${priceOf(a)}</span></button></li>`).join('') || `<li>${t('noResults')}</li>`}</ul>
+    ${res.length > filterLimit ? `<button type="button" class="btn-ghost more" data-more>${t('showMore')} (+${Math.min(40, res.length - filterLimit)})</button>` : ''}
+    <p class="note">${t('priceUpdated')} ${snapDate()}</p>
     <div class="filter-foot"><button class="btn-ghost" data-reset>${t('reset')}</button><button class="primary" data-close>${t('showList')} (${res.length})</button></div>`;
 }
 function readFilters() {
   const fd = new FormData($('#ff')); const f = state.filters;
   f.kinds = new Set(fd.getAll('kind')); f.statuses = new Set(fd.getAll('status'));
   for (const k of ['areaMin', 'areaMax', 'floorMin', 'floorMax', 'priceMin', 'priceMax']) f[k] = String(fd.get(k) || '').replace(/[^\d.]/g, '');
+  filterLimit = 40;
 }
-let fT;
+let fT; let filterLimit = 40;
 $('#filters').addEventListener('input', () => { clearTimeout(fT); fT = setTimeout(() => { readFilters(); const foc = document.activeElement?.name; renderFilters(); if (foc) $(`#filters [name="${foc}"]`)?.focus(); renderExplorer(); recolor(); }, 250); });
 $('#filters').addEventListener('click', (e) => {
-  if (e.target.closest('[data-reset]')) { state.filters = defaultFilters(); renderFilters(); renderExplorer(); recolor(); return; }
+  if (e.target.closest('[data-reset]')) { state.filters = defaultFilters(); filterLimit = 40; renderFilters(); renderExplorer(); recolor(); return; }
+  if (e.target.closest('[data-more]')) { filterLimit += 40; renderFilters(); return; }
   if (e.target.closest('[data-close]')) { showOnly(basePanel()); syncHistory(); return; }
   const ab = e.target.closest('[data-apt]'); if (ab) { showOnly(basePanel()); selectApt(ab.dataset.apt); }
 });
 $('#filter-open').addEventListener('click', () => {
-  if ($('#filters').hidden) { showOnly('filters'); renderFilters(); $('#filters input')?.focus(); }
+  if ($('#filters').hidden) { filterLimit = 40; showOnly('filters'); renderFilters(); $('#filters input')?.focus(); }
   else showOnly(basePanel());
 });
 
@@ -446,10 +501,10 @@ function leadResult(sent) {
   const body = sent ? t('formSent') : t('formNotSent');
   return `<div class="lead-result" role="status"><h3>${esc(title)}</h3><p>${esc(body)}</p>${callLink('form', true)}</div>`;
 }
-function openLead(id) {
+function openLead(id, { notify = false } = {}) {
   const a = aptById(id); const d = $('#lead');
-  track('lead_open', { apartment_id: a.id });
-  d.innerHTML = `<div class="dlg lead"><div class="dlg-head"><h2>${t('formTitle')}</h2><button class="x" data-close aria-label="${t('close')}">×</button></div>
+  track(notify ? 'notify_open' : 'lead_open', { apartment_id: a.id });
+  d.innerHTML = `<div class="dlg lead"><div class="dlg-head"><h2>${notify ? t('notifyMe') : t('formTitle')}</h2><button class="x" data-close aria-label="${t('close')}">×</button></div>
     <form method="dialog" id="lead-form">
       <label>${t('formApt')}<input name="apartment" value="${towerName(a.block)} · ${t('floor')} ${a.floor} · № ${a.number}" readonly /></label>
       <label>${t('formName')}<input name="name" autocomplete="name" required /></label>
@@ -557,12 +612,19 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Home') $('#reset').click();
   if (e.key === '+' || e.key === '=') state.scene?.zoom(0.8);
   if (e.key === '-') state.scene?.zoom(1.25);
+  if (e.key === 'ArrowLeft') { e.preventDefault(); state.scene?.nudge(0.18, 0); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); state.scene?.nudge(-0.18, 0); }
+  if (e.key === 'ArrowUp') { e.preventDefault(); state.scene?.nudge(0, -0.08); }
+  if (e.key === 'ArrowDown') { e.preventDefault(); state.scene?.nudge(0, 0.08); }
 });
 
 function showHint() {
   if (localStorage.getItem('hisni-hint')) return;
-  const h = $('#hint'); h.hidden = false; const done = () => { h.hidden = true; localStorage.setItem('hisni-hint', '1'); };
-  $('#hint-ok').onclick = done; setTimeout(done, 9000);
+  const h = $('#hint'); h.hidden = false;
+  const done = () => { if (h.hidden) return; h.hidden = true; localStorage.setItem('hisni-hint', '1'); document.removeEventListener('pointerdown', onFirst, true); };
+  const onFirst = () => done();
+  $('#hint-ok').onclick = (e) => { e.stopPropagation(); done(); };
+  document.addEventListener('pointerdown', onFirst, true);
 }
 
 // cheap capability check; real context creation failure is handled in boot()
