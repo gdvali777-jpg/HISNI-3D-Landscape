@@ -766,6 +766,8 @@ const PLACE_ORDER = ['metro', 'school', 'kinder', 'health', 'bus', 'shop', 'bank
 const enabledCats = new Set(['metro', 'school', 'bus']);
 let placesOpen = false;
 let placesListOpen = false;
+let introHold = null;
+const placesPhone = () => matchMedia('(max-width: 500px), (max-height: 500px) and (max-width: 960px)').matches;
 function placeCats() {
   const present = new Set(POIS.map((p) => p.cat));
   return PLACE_ORDER.filter((c) => present.has(c));
@@ -783,7 +785,9 @@ function paintPlaces() {
   panel.hidden = !placesOpen;
   $('#places-panel')?.setAttribute('aria-label', t('places'));
   const buttons = [`<button type="button" data-cat="all" aria-pressed="${allOn}">${t('placesAll')}</button>`];
-  for (const c of placeCats()) {
+  const catIds = placeCats();
+  const lead = ['metro', 'school', 'bus'].filter((c) => catIds.includes(c));
+  for (const c of [...lead, ...catIds.filter((c) => !lead.includes(c))]) {
     buttons.push(`<button type="button" data-cat="${c}" aria-pressed="${enabledCats.has(c)}">${t('poiCat')[c]}</button>`);
   }
   cats.innerHTML = buttons.join('');
@@ -845,7 +849,14 @@ const blockMenu = mountBlockMenu($('#block-menu-root'), {
 $('#places-btn')?.addEventListener('click', (e) => {
   e.stopPropagation();
   placesOpen = !placesOpen;
-  if (placesOpen && matchMedia('(max-width: 500px), (max-height: 500px) and (max-width: 960px)').matches) placesListOpen = false;
+  if (placesOpen && placesPhone()) {
+    if (introHold == null) introHold = $('#intro').classList.contains('is-collapsed');
+    placesListOpen = false;
+    applyIntroCollapsed(true, false);
+  } else if (!placesOpen && introHold != null) {
+    applyIntroCollapsed(introHold, false);
+    introHold = null;
+  }
   blockMenu?.close();
   paintPlaces();
   state.scene?.request();
@@ -859,7 +870,12 @@ $('#places-list')?.addEventListener('click', (e) => {
   const b = e.target.closest('[data-poi]');
   if (!b) return;
   const p = POIS.find((x) => x.id === b.dataset.poi);
-  if (p) focusPoi(p);
+  if (!p) return;
+  if (placesPhone()) {
+    placesListOpen = false;
+    paintPlaces();
+  }
+  focusPoi(p);
 });
 $('#places-cats')?.addEventListener('click', (e) => {
   const b = e.target.closest('[data-cat]');

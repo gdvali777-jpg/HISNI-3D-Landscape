@@ -450,7 +450,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     });
     return out;
   }
-  const LABEL_AVOID = '#intro, #explorer, .sheet, .layers, .tools, .place-card, .crumbs, .header, .map-meta, footer, #hint, #toast, #bg-switch, #block-picker, .day-night, #view-toggle';
+  const LABEL_AVOID = '#intro, #explorer, .sheet, .layers, .tools, .place-card, .crumbs, .header, .map-meta, footer, #hint, #toast, #bg-switch, #block-picker, #places-panel, .day-night, #view-toggle';
   const hit = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
   function updateLabels(precise) {
     const w = container.clientWidth, h = container.clientHeight;
@@ -1029,50 +1029,34 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
       const towers = items.filter((o) => o.it.isTower && o.it.el.style.opacity !== '0').map((o) => rectOf(o.it));
       const placed = [];
       const hits = (box) => panels.some((p) => overlap(box, p)) || towers.some((p) => overlap(box, p)) || placed.some((p) => overlap(box, p));
-      for (const o of pois) {
-        const it = o.it;
-        if (!o.vis && !it.el.classList.contains('is-hot')) { hideLabel(it); continue; }
-        const hot = it.el.classList.contains('is-hot');
-        const fullW = Math.min(220, 108 + (it.el.dataset.len || 12) * 6);
-        const tries = hot ? [[fullW, false]] : [[fullW, false], [96, true]];
-        let found = null;
-        let compact = false;
-        for (const [lw, isCompact] of tries) {
-          const lh = 44;
-          const steps = [0, 48, -48, 96, -96, 150, -150];
-          const downs = [0, 28, 64, -28];
-          search: for (const dy of downs) {
-            for (const dx of steps) {
-              const cx = Math.min(w - 6 - lw / 2, Math.max(6 + lw / 2, o.sx + dx));
-              const top = Math.min(h - 6 - lh, Math.max(6, o.sy - lh - 10 + dy));
-              const box = { l: cx - lw / 2, t: top, r: cx + lw / 2, b: top + lh };
-              if (box.l < 1 || box.r > w - 1 || box.t < 1 || box.b > h - 1) continue;
-              if (hits(box)) continue;
-              found = box;
-              compact = isCompact;
-              break search;
-            }
+      const seek = (o, lw) => {
+        const lh = 44;
+        const steps = [0, 104, -104, 208, -208, 52, -52];
+        const downs = [0, 50, -50, 100, 150];
+        for (const dy of downs) {
+          for (const dx of steps) {
+            const cx = Math.min(w - 8 - lw / 2, Math.max(8 + lw / 2, o.sx + dx));
+            const top = Math.min(h - 8 - lh, Math.max(8, o.sy - lh - 8 + dy));
+            const box = { l: cx - lw / 2, t: top, r: cx + lw / 2, b: top + lh };
+            if (box.l < 2 || box.r > w - 2 || box.t < 2 || box.b > h - 2) continue;
+            if (hits(box)) continue;
+            return box;
           }
-          if (found) break;
         }
-        if (!found) {
-          const lw = 96;
-          const lh = 44;
-          const cx = Math.min(w - 6 - lw / 2, Math.max(6 + lw / 2, o.sx + (pois.indexOf(o) % 3 - 1) * 28));
-          const top = Math.min(h - 6 - lh, Math.max(6, o.sy - lh - 10));
-          const box = { l: cx - lw / 2, t: top, r: cx + lw / 2, b: top + lh };
-          const blocked = panels.some((p) => overlap(box, p)) || towers.some((p) => overlap(box, p));
-          if (!blocked && box.l >= 1 && box.r <= w - 1) { found = box; compact = true; }
-        }
-        if (!found && hot) {
-          const lw = Math.min(200, w - 16);
-          const lh = 44;
-          const cx = Math.min(w - 8 - lw / 2, Math.max(8 + lw / 2, o.sx));
-          found = { l: cx - lw / 2, t: 108, r: cx + lw / 2, b: 152 };
-          compact = false;
-        }
-        if (!found) { hideLabel(it); continue; }
-        it.el.classList.toggle('is-compact', compact && !hot);
+        return null;
+      };
+      const ordered = pois.slice().sort((a, b) => (b.it.el.classList.contains('is-hot') - a.it.el.classList.contains('is-hot')) || (a.sy - b.sy));
+      for (const o of ordered) {
+        const it = o.it;
+        const hot = it.el.classList.contains('is-hot');
+        if (!o.vis && !hot) { hideLabel(it); it.el.style.width = ''; continue; }
+        const fullW = Math.min(w > 800 ? 320 : 248, 112 + (Number(it.el.dataset.len) || 8) * 8);
+        let found = seek(o, fullW);
+        let compact = false;
+        if (!found) { found = seek(o, 108); compact = true; }
+        if (!found) { hideLabel(it); it.el.style.width = ''; continue; }
+        it.el.classList.toggle('is-compact', compact);
+        it.el.style.width = `${Math.round(found.r - found.l)}px`;
         it._lw = found.r - found.l;
         it._lh = 44;
         it._lx = (found.l + found.r) / 2;
