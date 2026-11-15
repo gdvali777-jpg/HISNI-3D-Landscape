@@ -322,6 +322,7 @@ function applyHistoryUrl() {
   if (renderMode) {
     renderMode = false;
     app.classList.remove('is-render');
+    document.documentElement.classList.remove('boot-render');
     renderApi?.hide();
   }
   applyDeepLink(p);
@@ -1006,6 +1007,7 @@ async function leaveRender() {
   renderMode = false;
   app.classList.remove('is-render');
   app.classList.add('render-armed');
+  document.documentElement.classList.remove('boot-render');
   renderApi?.hide();
   paintViewToggle();
   const carried = renderApi?.block() || null;
