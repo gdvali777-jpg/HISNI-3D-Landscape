@@ -145,6 +145,14 @@ html[lang="en"] .stats small { min-height: 2.6em; }
 .cta-short { display: none; }
 .apt-card .cta-row .call-btn { flex: 1 1 auto; min-width: 0; white-space: normal; text-align: center; }
 .filters h2 { margin: 0; font-size: 22px; }
+.filters { scroll-padding-bottom: 84px; }
+.block-drop { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 12px; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; font-weight: 500; text-align: left; }
+.block-drop-menu { display: grid; gap: 4px; margin-top: 6px; max-height: min(148px, 26dvh); overflow: auto; }
+.block-drop-menu[hidden] { display: none; }
+.block-drop-menu button { min-height: 44px; width: 100%; border: 0; border-radius: 12px; background: #fff; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 14px; text-align: left; }
+.block-drop-menu button[aria-selected="true"] { background: var(--navy); color: var(--cream); }
+.block-drop-menu .tick { font-style: normal; font-weight: 700; }
+.filters .filter-foot { box-shadow: 0 -8px 12px rgba(248,246,238,.9); }
 .filters fieldset { border: 0; padding: 0; margin: 12px 0; } .filters legend { font-size: 12px; color: var(--small); margin-bottom: 6px; padding: 0; }
 .seg { display: flex; flex-wrap: wrap; gap: 6px; } .seg label { position: relative; }
 .seg input { position: absolute; opacity: 0; } .seg span { display: inline-flex; min-height: 44px; align-items: center; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: #fff; font-size: 14px; }
