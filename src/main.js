@@ -743,7 +743,7 @@ document.addEventListener('click', (e) => {
 
 // ---------- about ----------
 function tourCards() {
-  return `<h3>${t('tour')}</h3><div class="tour-cards">${[1, 2, 3].map((n) => `<button type="button" class="tour-card" data-tour-view="${n}"><img src="https://hisni.biograpi.ge/v${n}/1/f0_0.jpg" alt="" /><span class="tour-badge">360°</span><span class="tour-card-name">${t('tourScene')} ${n}</span></button>`).join('')}</div>`;
+  return `<h3>${t('tour')}</h3><div class="tour-cards">${[1, 2, 3].map((n) => `<button type="button" class="tour-card" data-tour-view="${n}"><img src="${BASE}tour/thumbs/v${n}.webp" alt="" /><span class="tour-badge">360°</span><span class="tour-card-name">${t('tourScene')} ${n}</span></button>`).join('')}</div>`;
 }
 function openAbout() {
   const d = $('#about'); const L = STRINGS[getLang()];
