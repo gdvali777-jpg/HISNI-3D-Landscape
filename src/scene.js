@@ -955,8 +955,8 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
       });
       const placed = [];
       const short = h < 430;
-      const lw = short ? 36 : 44;
-      const lh = short ? 36 : 44;
+      const lw = 44;
+      const lh = 44;
       const near = (it) => it._sy > -160 && it._sy < h + 160 && it._sx > -160 && it._sx < w + 160;
       for (const o of group) {
         const it = o.it;
@@ -997,7 +997,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
       if (overview && short) {
         const shown = group.filter((o) => o.vis && o.it.el.style.opacity !== '0');
         if (shown.length < 4) {
-          const size = 40;
+          const size = 44;
           let x = Math.max(w * 0.5, 8);
           const top = Math.min(h - size - 8, 112);
           const row = [];
@@ -1026,12 +1026,20 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     placePoiMarkers();
     function placePoiMarkers() {
       const pois = items.filter((o) => o.it.el.classList.contains('poi-on') && !o.it.el.hidden);
-      const towers = items.filter((o) => o.it.isTower && o.it.el.style.opacity !== '0').map((o) => rectOf(o.it));
+      const grow = (b, n) => ({ l: b.l - n, t: b.t - n, r: b.r + n, b: b.b + n });
+      const touches = (a, b) => a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t;
+      const towers = items.filter((o) => o.it.isTower && o.it.el.style.opacity !== '0').map((o) => {
+        const b = rectOf(o.it);
+        const cx = (b.l + b.r) / 2;
+        const cy = (b.t + b.b) / 2;
+        return { l: cx - 26, t: cy - 26, r: cx + 26, b: cy + 26 };
+      });
+      const obstacles = panels.map((p) => grow(p, 4));
       const placed = [];
-      const hits = (box) => panels.some((p) => overlap(box, p)) || towers.some((p) => overlap(box, p)) || placed.some((p) => overlap(box, p));
+      const hits = (box) => obstacles.some((p) => touches(box, p)) || towers.some((p) => touches(box, p)) || placed.some((p) => touches(box, grow(p, 4)));
       const seek = (o, lw) => {
         const lh = 44;
-        const steps = [0, 104, -104, 208, -208, 52, -52];
+        const steps = [0, lw + 10, -(lw + 10), (lw + 10) * 2, -((lw + 10) * 2)];
         const downs = [0, 50, -50, 100, 150];
         for (const dy of downs) {
           for (const dx of steps) {
@@ -1039,7 +1047,8 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
             const top = Math.min(h - 8 - lh, Math.max(8, o.sy - lh - 8 + dy));
             const box = { l: cx - lw / 2, t: top, r: cx + lw / 2, b: top + lh };
             if (box.l < 2 || box.r > w - 2 || box.t < 2 || box.b > h - 2) continue;
-            if (hits(box)) continue;
+            // The 14px stem hangs below the pill and was landing on tower badges.
+            if (hits({ l: box.l, t: box.t, r: box.r, b: box.b + 16 })) continue;
             return box;
           }
         }
@@ -1050,7 +1059,8 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         const it = o.it;
         const hot = it.el.classList.contains('is-hot');
         if (!o.vis && !hot) { hideLabel(it); it.el.style.width = ''; continue; }
-        const fullW = Math.min(w > 800 ? 320 : 248, 112 + (Number(it.el.dataset.len) || 8) * 8);
+        const chars = Number(it.el.dataset.len) || 8;
+        const fullW = Math.min(w > 800 ? 360 : 300, Math.ceil(150 + chars * (document.documentElement.lang === 'ka' ? 8.4 : 6.8)));
         let found = seek(o, fullW);
         let compact = false;
         if (!found) { found = seek(o, 108); compact = true; }
@@ -1061,10 +1071,13 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         it._lh = 44;
         it._lx = (found.l + found.r) / 2;
         it._lift = 0;
+        it._sx = o.sx;
         it._sy = found.b;
         reveal(it);
         commit(it);
-        placed.push(found);
+        const shifted = Math.abs(it._lx - it._sx) > 1;
+        const visual = shifted ? { l: found.l, t: found.t - 14, r: found.r, b: found.b - 14 } : found;
+        placed.push({ l: visual.l - 2, t: visual.t - 2, r: visual.r + 2, b: visual.b + (shifted ? 2 : 16) });
       }
     }
   }

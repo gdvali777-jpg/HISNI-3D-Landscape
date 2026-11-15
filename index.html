@@ -25,6 +25,11 @@
   <script>
     (function () {
       var q = location.search;
+      var en = /(?:^|[?&])lang=en(?:&|$)/.test(q);
+      if (!en && !/(?:^|[?&])lang=ka(?:&|$)/.test(q)) {
+        try { en = localStorage.getItem('hisni-lang') === 'en'; } catch (e) { en = false; }
+      }
+      if (en) document.documentElement.lang = 'en';
       if (!/(?:^|[?&])(?:view=render|mode=render)(?:&|$)/.test(q)) return;
       document.documentElement.classList.add('boot-render');
       var narrow = matchMedia('(max-width: 819px)').matches;
@@ -131,6 +136,29 @@
     <button type="button" id="intro-about" class="text-link" data-i18n="aboutRenders"></button>
     </div>
   </section>
+  <script>
+    if (document.documentElement.lang === 'en') {
+      var enText = {
+        title: 'Hisni',
+        titleSub: 'A 15-minute city',
+        explore: 'Find an apartment',
+        address: '69 Ketevan Dedofali Ave, Isani, Tbilisi',
+        introCopy: 'A multifunctional residential complex directly opposite the Isani metro station.',
+        statTowers: 'Towers',
+        statFloors: 'Floors',
+        statMall: 'sq.m shopping center',
+        statGreen: 'sq.m recreational space',
+        aboutRenders: 'About the project and renders',
+        statSrc: 'Source: biograpi.ge, 3 Nov 2026'
+      };
+      Object.keys(enText).forEach(function (key) {
+        var el = document.querySelector('[data-i18n="' + key + '"]');
+        if (el) el.textContent = enText[key];
+      });
+      var call = document.querySelector('#intro-call');
+      if (call) call.textContent = 'Call';
+    }
+  </script>
 
   <nav id="crumbs" class="crumbs" hidden aria-label="Explorer"></nav>
   <aside id="explorer" class="explorer panel" hidden>
