@@ -166,7 +166,7 @@ footer { position: absolute; right: 64px; bottom: 6px; font-size: 12px; color: v
 .night footer { color: rgba(239,235,212,.7); }
 .label { position: absolute; left: 0; top: 0; pointer-events: none; white-space: nowrap; transition: opacity .2s; }
 .label[aria-hidden="false"] { pointer-events: auto; }
-.label[aria-hidden="true"], .label[aria-hidden="true"] button { pointer-events: none; }
+.label[aria-hidden="true"], .label[aria-hidden="true"] button { pointer-events: none; visibility: hidden; }
 @media (max-width: 819px) { .label[data-pri='low'] { display: none; } .label button { font-size: 12px; } }
 .label button { border: 0; border-radius: 999px; background: rgba(248,246,238,.95); box-shadow: 0 4px 14px rgba(0,0,0,.18); min-height: 44px; padding: 0 12px 0 4px; display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .label i { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-style: normal; font-size: 11px; font-weight: 700; color: #fff; background: var(--navy); }
@@ -222,13 +222,13 @@ html.boot-render #loading { display: none !important; }
 .places-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .places-list li { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 8px; border-radius: 10px; background: rgba(255,255,255,.7); }
 .places-list small { color: var(--muted); white-space: nowrap; }
-.day-night { position: absolute; z-index: 5; left: 12px; bottom: calc(78px + env(safe-area-inset-bottom)); display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(28, 19, 34, .82); }
+.day-night { position: absolute; z-index: 8; left: auto; right: calc(8px + env(safe-area-inset-right)); bottom: calc(230px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 4px; padding: 4px; border-radius: 16px; background: rgba(28, 19, 34, .82); }
 .day-night button { min-height: 44px; min-width: 44px; border: 0; border-radius: 999px; padding: 0 14px; background: transparent; color: var(--cream); }
 .day-night button[aria-pressed="true"] { background: var(--cream); color: var(--navy); }
 .render-panel { position: absolute; z-index: 4; top: calc(max(10px, env(safe-area-inset-top)) + 112px); left: 12px; right: auto; width: max-content; max-width: calc(100% - 24px); display: flex; flex-direction: column; align-items: flex-start; gap: 8px; pointer-events: none; }
 .render-blocks { position: relative; pointer-events: auto; }
 .render-block-btn { min-height: 44px; min-width: 44px; border: 0; border-radius: 999px; padding: 0 16px; background: rgba(28, 19, 34, .9); color: var(--cream); font-weight: 600; white-space: nowrap; }
-.render-block-menu { position: absolute; top: calc(100% + 6px); left: 0; min-width: 220px; padding: 6px; border-radius: 16px; background: rgba(248, 246, 238, .98); color: var(--ink); box-shadow: var(--shadow); display: grid; gap: 2px; z-index: 2; }
+.render-block-menu { position: absolute; top: calc(100% + 6px); left: 0; min-width: 220px; max-height: min(320px, calc(100dvh - 130px)); overflow: auto; padding: 6px; border-radius: 16px; background: rgba(248, 246, 238, .98); color: var(--ink); box-shadow: var(--shadow); display: grid; gap: 2px; z-index: 2; }
 .render-block-menu[hidden] { display: none; }
 .render-block-menu button { min-height: 44px; border: 0; border-radius: 12px; background: transparent; color: inherit; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 12px; text-align: left; }
 .render-block-menu button[aria-checked="true"] { background: var(--primary); color: var(--navy); }
@@ -251,6 +251,7 @@ html.boot-render #loading { display: none !important; }
   #app.is-render .render-spin { left: calc(8px + env(safe-area-inset-left)); right: calc(72px + env(safe-area-inset-right)); width: auto; transform: none; justify-content: center; }
   #app.render-armed #view-toggle { position: fixed; right: calc(10px + env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 7; min-width: 44px; }
   #app.render-armed .tools { bottom: calc(74px + env(safe-area-inset-bottom)); }
+  .crumbs { top: calc(max(8px, env(safe-area-inset-top)) + 108px); left: 12px; right: 16px; z-index: 6; }
   #app:has(#apt-card:not([hidden])) .tools,
   #app:has(#filters:not([hidden])) .tools,
   #app:has(#place-card:not([hidden])) .tools { display: none !important; }
@@ -309,6 +310,7 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
   #layer-options { display: flex !important; gap: 12px; } #layer-options[hidden] { display: flex !important; } .panel-heading { display: none; }
   .tools { right: 22px; bottom: 22px; } .map-meta { right: 22px; top: 86px; bottom: auto; }
   #app.side-sheet .tools, #app.side-sheet .map-meta { right: 440px; }
+  #app.side-sheet .tools { bottom: 86px; }
   #app.side-sheet .crumbs { right: 528px; }
   footer { left: auto; right: 84px; bottom: 10px; max-width: none; background: transparent; }
   .apt-card .plan { max-height: 32dvh; aspect-ratio: 4/3; }
@@ -395,8 +397,11 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
   .intro .intro-actions .primary { margin-top: 0; position: static; width: auto; }
   .intro.is-collapsed .primary { width: auto; margin-top: 0; }
   .intro.is-collapsed .call-btn { min-height: 44px; }
-  .crumbs { top: calc(48px + env(safe-area-inset-top)); left: calc(8px + env(safe-area-inset-left)); right: auto; max-width: min(280px, 46vw); flex-wrap: nowrap; }
-  .explorer { left: calc(8px + env(safe-area-inset-left)); right: auto; top: calc(96px + env(safe-area-inset-top)); bottom: calc(52px + env(safe-area-inset-bottom)); width: min(280px, 46vw); max-height: none; }
+  .block-picker { left: auto; right: calc(8px + env(safe-area-inset-right)); top: calc(max(6px, env(safe-area-inset-top)) + 50px); }
+  .render-block-menu, .places-panel { left: auto; right: 0; max-height: calc(100dvh - 120px - env(safe-area-inset-top)); }
+  .crumbs { top: calc(max(6px, env(safe-area-inset-top)) + 52px); left: calc(8px + env(safe-area-inset-left)); right: calc(220px + env(safe-area-inset-right)); max-width: none; flex-wrap: nowrap; z-index: 6; }
+  .intro { max-height: calc(100dvh - 176px); }
+  .explorer { left: calc(8px + env(safe-area-inset-left)); right: auto; top: calc(108px + env(safe-area-inset-top)); bottom: calc(52px + env(safe-area-inset-bottom)); width: min(280px, 46vw); max-height: none; }
   .explorer h2 { font-size: 16px; margin: 0 0 2px; }
   .explorer-body > p:not(.note) { display: none; }
   .explorer-body { padding-top: 0; }
@@ -406,8 +411,8 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
   .apt-card .sheet-head { flex: none; }
   .apt-card .apt-body { overflow: auto; flex: 1 1 auto; min-height: 0; max-height: calc(100dvh - 220px); }
   .apt-card .plan { max-height: 16dvh; margin: 6px 0; }
-  .apt-card .cta-row { flex: none; flex-wrap: nowrap; gap: 6px; padding: 6px 0 0; }
-  .apt-card .cta-row .primary, .apt-card .cta-row .call-btn { flex: 1 1 0; min-width: 44px; min-height: 44px; height: 44px; padding: 0 8px; font-size: 12px; white-space: nowrap; }
+  .apt-card .cta-row { flex: none; flex-wrap: wrap; gap: 6px; padding: 6px 0 0; }
+  .apt-card .cta-row .primary, .apt-card .cta-row .call-btn { flex: 1 1 140px; min-width: 120px; min-height: 44px; height: auto; padding: 6px 8px; font-size: 12px; line-height: 1.15; white-space: normal; text-align: center; }
   .hint { top: auto; bottom: calc(60px + env(safe-area-inset-bottom)); right: calc(60px + env(safe-area-inset-right)); max-width: min(220px, 42vw); }
   .layers { left: 40vw; right: calc(56px + env(safe-area-inset-right)); bottom: calc(4px + env(safe-area-inset-bottom)); max-width: none; width: auto; flex-direction: row; align-items: center; overflow: hidden; }
   .layers .light { flex: 1; min-width: 0; }

@@ -944,41 +944,53 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     function placeTowerBadges() {
       const group = items.filter((o) => o.it.isTower && o.it.el.classList.contains('num'));
       if (!group.length) return;
+      const view = document.documentElement.dataset.view || 'intro';
+      const overview = view === 'intro' || view === 'towers';
+      if (view === 'floor') { group.forEach((o) => hideLabel(o.it)); return; }
+      const others = items.filter((o) => !o.it.isTower && o.it.el.style.opacity !== '0' && !o.it.el.hidden).map((o) => rectOf(o.it));
+      const hitsUi = (box) => panels.some((p) => {
+        const small = (p.r - p.l) < 90 && (p.b - p.t) < 90;
+        const extra = small ? 8 : 0;
+        return overlap(box, { l: p.l - extra, t: p.t - extra, r: p.r + extra, b: p.b + extra });
+      });
       const placed = [];
       const lw = 44;
       const lh = 44;
+      const near = (it) => it._sy > -160 && it._sy < h + 160 && it._sx > -160 && it._sx < w + 160;
       for (const o of group) {
         const it = o.it;
         it._lw = lw;
         it._lh = lh;
-        const onScreen = o.vis && it._sx > -30 && it._sx < w + 30 && it._sy > -30 && it._sy < h + 30;
-        if (!onScreen) { hideLabel(it); continue; }
+        if (!o.vis || !near(it)) { hideLabel(it); continue; }
         let found = null;
-        const steps = [0, 28, -28, 56, -56, 88, -88, 120, -120];
-        const downs = [0, 16, 40, 72, 110, 150];
+        const steps = [0, 40, -40, 80, -80, 120, -120];
+        const downs = [0, 20, 48, 84, 124];
         search: for (const dy of downs) {
           for (const dx of steps) {
-            const cx = Math.min(w - 8 - lw / 2, Math.max(8 + lw / 2, it._sx + dx));
-            const top = Math.min(h - 8 - lh, Math.max(8, it._sy - lh - 6 + dy));
+            const cx = Math.min(w - 6 - lw / 2, Math.max(6 + lw / 2, it._sx + dx));
+            const top = Math.min(h - 6 - lh, Math.max(6, it._sy - lh - 8 + dy));
             const box = { l: cx - lw / 2, t: top, r: cx + lw / 2, b: top + lh };
-            if (box.l < 2 || box.t < 2 || box.r > w - 2 || box.b > h - 2) continue;
-            if (panels.some((p) => overlap(box, p))) continue;
+            if (box.l < 1 || box.t < 1 || box.r > w - 1 || box.b > h - 1) continue;
+            if (hitsUi(box)) continue;
             if (placed.some((p) => overlap(box, p))) continue;
-            found = { cx, top };
+            if (others.some((p) => overlap(box, p))) continue;
+            found = box;
             break search;
           }
         }
         if (!found) { hideLabel(it); continue; }
-        it._lx = found.cx;
+        it._lx = (found.l + found.r) / 2;
         it._lift = 0;
-        it._sy = found.top + lh;
+        it._sy = found.b;
         reveal(it);
         commit(it);
-        placed.push({ l: found.cx - lw / 2, t: found.top, r: found.cx + lw / 2, b: found.top + lh });
+        placed.push(found);
       }
-      const onScreen = group.filter((o) => o.vis && o.it._sx > -30 && o.it._sx < w + 30 && o.it._sy > -30 && o.it._sy < h + 30);
-      const visible = onScreen.filter((o) => o.it.el.style.opacity !== '0');
-      if (onScreen.length >= 4 && visible.length > 0 && visible.length < onScreen.length) onScreen.forEach((o) => hideLabel(o.it));
+      if (overview) {
+        const wanted = group.filter((o) => o.vis && near(o.it));
+        const shown = wanted.filter((o) => o.it.el.style.opacity !== '0');
+        if (wanted.length >= 4 && shown.length > 0 && shown.length < wanted.length) wanted.forEach((o) => hideLabel(o.it));
+      }
     }
   }
 

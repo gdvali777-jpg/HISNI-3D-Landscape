@@ -2,7 +2,6 @@ import './style.css';
 import { t, getLang, setLang, STRINGS } from './i18n.js';
 import { loadApartments, submitLead, CONTACT } from './data/adapter.js';
 import { track } from './analytics.js';
-import { createRenderView } from './render-view.js';
 import { mountBlockMenu } from './block-menu.js';
 
 const BASE = import.meta.env.BASE_URL;
@@ -20,8 +19,8 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 // Points of interest. Coordinates: local metres (x east, z south) from the OSM snapshot.
 // Walking times for metro/school are the client's figures; others = straight-line × 1.3 at 80 m/min (approx.).
 const POIS = [
-  { id: 'metro', cat: 'metro', icon: 'M', x: 151, z: -82, ka: 'მეტროსადგური „ისანი“', en: 'Isani metro station', ska: 'მეტრო „ისანი“', sen: 'Isani metro', min: 2, src: 'client' },
-  { id: 'school', cat: 'school', icon: '87', x: -120, z: -140, ka: 'ვაჟა-ფშაველას სახ. №87 საჯარო სკოლა', en: 'Public School No. 87 (Vazha-Pshavela)', ska: '№87 სკოლა', sen: 'School No. 87', min: 2, src: 'client' },
+  { id: 'metro', cat: 'metro', icon: 'M', x: 151, z: -82, ka: 'მეტროსადგური „ისანი“', en: 'Isani metro station', ska: 'მეტრო', sen: 'Metro', min: 2, src: 'client' },
+  { id: 'school', cat: 'school', icon: '87', x: -120, z: -140, ka: 'ვაჟა-ფშაველას სახ. №87 საჯარო სკოლა', en: 'Public School No. 87 (Vazha-Pshavela)', ska: 'სკოლა', sen: 'School', min: 2, src: 'client' },
   { id: 'bus', cat: 'bus', icon: 'B', x: 154, z: -66, ka: 'ავტობუსის გაჩერება „მ/ს ისანი“', en: 'Bus stop “M/S Isani”', ska: 'ავტობუსი', sen: 'Bus stop', m: 167 },
   { id: 'evex', cat: 'health', icon: '+', x: -172, z: -13, ka: 'პოლიკლინიკა „ევექსი“', en: 'Evex Polyclinic', m: 173 },
   { id: 'aversi', cat: 'health', icon: '+', x: 164, z: 134, ka: 'ავერსის კლინიკა', en: 'Aversi Clinic', m: 212 },
@@ -34,6 +33,20 @@ POIS.forEach((p) => { if (p.min == null) p.min = Math.max(1, Math.round((p.m * 1
 const state = { view: 'intro', tower: null, floor: null, apt: null, light: 'day', filters: null, scene: null, doc: null, planTab: '2d', place: null };
 let renderMode = false;
 let renderApi = null;
+let renderLoader = null;
+function loadRenderView() {
+  renderLoader = renderLoader || import('./render-view.js');
+  return renderLoader;
+}
+function closeRenderSheet() {
+  if (!renderMode) return;
+  $('#explorer').hidden = true;
+  $('#intro').hidden = true;
+  $('#apt-card').hidden = true;
+  $('#filters').hidden = true;
+  $('#place-card').hidden = true;
+  app.classList.remove('side-sheet');
+}
 let ctxPromise = null;
 const wantsRender = (p) => p.get('view') === 'render' || p.get('mode') === 'render';
 const defaultFilters = () => ({ kinds: new Set(), statuses: new Set(), areaMin: '', areaMax: '', floorMin: '', floorMax: '', priceMin: '', priceMax: '' });
@@ -781,6 +794,8 @@ const blockMenu = mountBlockMenu($('#block-menu-root'), {
   onSelect(id) {
     if (renderMode) {
       renderApi?.setBlock(id);
+      if (!id || blockOf(id)?.has_data) closeRenderSheet();
+      blockMenu?.refresh();
       return;
     }
     if (!id) setView('intro', { tower: null, floor: null });
@@ -833,7 +848,10 @@ function renderHooks() {
     resetFilters() { state.filters = defaultFilters(); renderExplorer(); recolor(); if (!$('#filters').hidden) renderFilters(); },
     onFloor(id, floor) { setView('floor', { tower: id, floor }); },
     onSoon(id) { setView('block', { tower: id }); },
-    onBlock() { blockMenu?.refresh(); },
+    onBlock(id) {
+      blockMenu?.refresh();
+      if (renderMode && (!id || blockOf(id)?.has_data)) closeRenderSheet();
+    },
   };
 }
 async function openRender() {
@@ -842,7 +860,10 @@ async function openRender() {
   $('#view-toggle').hidden = false;
   $('#view-toggle').textContent = t('view3d');
   $('#view-toggle').setAttribute('aria-pressed', 'true');
-  if (!renderApi) renderApi = await createRenderView(renderHooks());
+  if (!renderApi) {
+    const { createRenderView } = await loadRenderView();
+    renderApi = await createRenderView(renderHooks());
+  }
   const carry = (state.view === 'block' || state.view === 'floor') ? state.tower : null;
   await renderApi?.show();
   if (carry) renderApi?.setBlock(carry);
