@@ -82,7 +82,7 @@ function wants3D(p) {
   if (p.get('quality') || p.get('light')) return true;
   return false;
 }
-const defaultFilters = () => ({ kinds: new Set(), statuses: new Set(), areaMin: '', areaMax: '', floorMin: '', floorMax: '', priceMin: '', priceMax: '' });
+const defaultFilters = () => ({ block: null, kinds: new Set(), statuses: new Set(), areaMin: '', areaMax: '', floorMin: '', floorMax: '', priceMin: '', priceMax: '' });
 state.filters = defaultFilters();
 
 // ---------- i18n ----------
@@ -189,6 +189,7 @@ const showsPrice = (a) => (a.status === 'available' || a.status === 'queue') && 
 const priceOf = (a) => (showsPrice(a) ? fmtUsd(a.price_usd) : '');
 const aptById = (id) => state.doc.apartments.find((a) => a.id === id);
 function matches(a, f = state.filters) {
+  if (f.block && a.block !== f.block) return false;
   if (f.kinds.size && !f.kinds.has(a.type.kind)) return false;
   if (f.statuses.size && !f.statuses.has(a.status)) return false;
   const ar = a.area;
@@ -201,7 +202,7 @@ function matches(a, f = state.filters) {
   }
   return true;
 }
-const filtersActive = () => { const f = state.filters; return f.kinds.size || f.statuses.size || ['areaMin', 'areaMax', 'floorMin', 'floorMax', 'priceMin', 'priceMax'].some((k) => f[k] !== ''); };
+const filtersActive = () => { const f = state.filters; return !!f.block || f.kinds.size || f.statuses.size || ['areaMin', 'areaMax', 'floorMin', 'floorMax', 'priceMin', 'priceMax'].some((k) => f[k] !== ''); };
 const statusFilterOn = () => state.filters.statuses.size > 0;
 // Floor tiles count available apartments until a status chip is on; then they count the selected statuses.
 // Other Filters-panel constraints (type, area, price, floor) always apply, via the same `matches()`.
@@ -243,10 +244,11 @@ function urlForState() {
   if (state.tower && (state.view === 'block' || state.view === 'floor' || state.apt)) p.set('tower', state.tower);
   if (state.view === 'floor' && state.floor != null) p.set('floor', String(state.floor));
   if (state.apt) p.set('apt', state.apt);
+  if (state.filters?.block) p.set('block', state.filters.block);
   if (getLang() === 'en') p.set('lang', 'en');
   if (bootQuery.get('webgl') === '0') p.set('webgl', '0');
   if (bootQuery.get('bg') === 'real') p.set('bg', 'real');
-  if (renderMode && p.get('view')) p.set('mode', 'render');
+  if (renderMode && (p.get('view') || state.filters?.block)) p.set('mode', 'render');
   const quality = bootQuery.get('quality'); if (quality) p.set('quality', quality);
   const light = bootQuery.get('light'); if (light) p.set('light', light);
   if (!$('#filters').hidden) p.set('filters', '1');
@@ -272,6 +274,7 @@ function applyDeepLink(params) {
   if (aptId && aptById(aptId)) {
     const a = aptById(aptId);
     Object.assign(state, { view: 'floor', tower: a.block, floor: a.floor, apt: a.id });
+    state.filters.block = a.block;
     return;
   }
   const v = params.get('view');
@@ -279,6 +282,15 @@ function applyDeepLink(params) {
   else if (v === 'block') Object.assign(state, { view: 'block', tower: params.get('tower') || 'III', floor: null, apt: null });
   else if (v === 'towers') Object.assign(state, { view: 'towers', tower: null, floor: null, apt: null });
   else Object.assign(state, { view: 'intro', tower: null, floor: null, apt: null });
+  const block = params.get('block');
+  const known = block && state.doc?.blocks?.some((b) => b.id === block);
+  if (known && state.tower !== block) {
+    state.view = 'block';
+    state.tower = block;
+    state.floor = null;
+    state.apt = null;
+  }
+  state.filters.block = (state.view === 'block' || state.view === 'floor') ? (state.tower || null) : (known ? block : null);
 }
 // The landing entry becomes the overview. Each deeper level is pushed on top, so Back
 // from a deep link steps up one level instead of leaving the page.
@@ -429,8 +441,11 @@ document.addEventListener('click', (e) => {
   openTour(b.dataset.tourView);
 });
 function setView(v, opts = {}) {
+  const keepSheet = !!opts.keepSheet;
+  const next = { ...opts };
+  delete next.keepSheet;
   expandSheet();
-  Object.assign(state, { view: v }, opts);
+  Object.assign(state, { view: v }, next);
   document.documentElement.dataset.view = v;
   const S = state.scene;
   if (S) {
@@ -440,6 +455,20 @@ function setView(v, opts = {}) {
     if (v === 'floor') { S.highlightTower(null); S.buildFloor(state.tower, state.floor, floorApts(), (a) => statusColorHex[a.status] ?? 0x999999); recolor(); S.focusFloor(state.tower, state.floor); }
   }
   if (v !== 'floor') state.apt = null;
+  state.filters.block = (v === 'block' || v === 'floor') ? (state.tower || null) : null;
+  if (keepSheet && !$('#filters').hidden) {
+    renderCrumbs();
+    renderExplorer();
+    const body = $('#explorer-body'); if (body) body.scrollTop = 0;
+    syncHistory();
+    blockMenu?.refresh();
+    markTowerBadges();
+    renderFilters();
+    recolor();
+    renderApi?.refresh();
+    track('view_change', { view: state.view, tower: state.tower || '', floor: state.floor ?? '' });
+    return;
+  }
   showOnly(v === 'intro' ? 'intro' : 'explorer');
   renderCrumbs(); renderExplorer();
   const body = $('#explorer-body'); if (body) body.scrollTop = 0;
@@ -664,14 +693,46 @@ $('#apt-card').addEventListener('error', (e) => {
 }, true);
 
 // ---------- filters ----------
+let blockDropOpen = false;
+function chooseBlock(id) {
+  const next = id && state.doc.blocks.some((b) => b.id === id) ? id : null;
+  const keep = !$('#filters').hidden;
+  if (renderMode) {
+    state.filters.block = next;
+    renderApi?.setBlock(next);
+    blockMenu?.refresh();
+    if (keep) renderFilters();
+    renderExplorer();
+    recolor();
+    renderApi?.refresh();
+    syncHistory();
+    return;
+  }
+  if (!next) setView('intro', { tower: null, floor: null, keepSheet: keep });
+  else setView('block', { tower: next, floor: null, keepSheet: keep });
+}
+function blockFilterField(f) {
+  const blocks = state.doc.blocks;
+  const current = f.block && blocks.some((b) => b.id === f.block) ? f.block : null;
+  const label = current || t('allBlocks');
+  const opt = (id, text, on) => `<button type="button" role="option" data-filter-block="${id}" aria-selected="${on}"><span>${text}</span>${on ? '<i class="tick" aria-hidden="true">✓</i>' : ''}</button>`;
+  return `<fieldset class="block-filter"><legend>${t('block')}</legend>
+    <button type="button" class="block-drop" aria-expanded="${blockDropOpen}" aria-controls="block-filter-menu">${esc(label)} <span aria-hidden="true">▾</span></button>
+    <div id="block-filter-menu" class="block-drop-menu" role="listbox" aria-label="${esc(t('block'))}" ${blockDropOpen ? '' : 'hidden'}>
+      ${opt('', t('allBlocks'), !current)}
+      ${blocks.map((b) => opt(b.id, b.id, current === b.id)).join('')}
+    </div></fieldset>`;
+}
 function renderFilters() {
   const el = $('#filters'); const f = state.filters;
+  const scroll = el.scrollTop;
   const group = (a) => (a.status === 'available' ? 0 : a.status === 'queue' ? 1 : a.status === 'reserved' ? 2 : a.status === 'sold' ? 3 : 4);
   const priceKey = (a) => (showsPrice(a) ? Number(a.price_usd) : Number.POSITIVE_INFINITY);
   const res = state.doc.apartments.filter((a) => matches(a)).sort((x, y) => group(x) - group(y) || priceKey(x) - priceKey(y) || x.block.localeCompare(y.block) || x.floor - y.floor);
   const kinds = ['studio', '1br', '2br'], sts = STATUSES;
   el.innerHTML = `<div class="sheet-head"><h2>${t('filters')}</h2><button class="x" data-close aria-label="${t('close')}">×</button></div>
     <form id="ff">
+      ${blockFilterField(f)}
       <fieldset><legend>${t('rooms')}</legend><div class="seg">${kinds.map((k) => `<label><input type="checkbox" name="kind" value="${k}" ${f.kinds.has(k) ? 'checked' : ''}/><span>${kindLabel(k)}</span></label>`).join('')}</div></fieldset>
       <fieldset><legend>${t('status')}</legend><div class="seg">${sts.map((k) => `<label><input type="checkbox" name="status" value="${k}" ${f.statuses.has(k) ? 'checked' : ''}/><span><i class="dot ${k}"></i>${statusLabel(k)}</span></label>`).join('')}</div></fieldset>
       <fieldset><legend>${t('areaRange')}</legend><div class="range"><input name="areaMin" inputmode="decimal" placeholder="${t('min')} ${Math.floor(Math.min(...state.doc.apartments.map((x) => x.area)))}" value="${f.areaMin}" aria-label="${t('areaRange')} min"/><input name="areaMax" inputmode="decimal" placeholder="${t('max')} ${Math.ceil(Math.max(...state.doc.apartments.map((x) => x.area)))}" value="${f.areaMax}" aria-label="${t('areaRange')} max"/></div></fieldset>
@@ -683,6 +744,7 @@ function renderFilters() {
     ${res.length > filterLimit ? `<button type="button" class="btn-ghost more" data-more>${t('showMore')} (+${Math.min(40, res.length - filterLimit)})</button>` : ''}
     <p class="note">${t('priceUpdated')} ${snapDate()}</p>
     <div class="filter-foot"><button class="btn-ghost" data-reset>${t('reset')}</button><button class="primary" data-close>${t('showList')} (${res.length})</button></div>`;
+  el.scrollTop = scroll;
 }
 function readFilters() {
   const fd = new FormData($('#ff')); const f = state.filters;
@@ -692,8 +754,33 @@ function readFilters() {
 }
 let fT; let filterLimit = 40;
 $('#filters').addEventListener('input', () => { clearTimeout(fT); fT = setTimeout(() => { readFilters(); const foc = document.activeElement?.name; renderFilters(); if (foc) $(`#filters [name="${foc}"]`)?.focus(); renderExplorer(); recolor(); renderApi?.refresh(); }, 250); });
+$('#filters').addEventListener('pointerdown', (e) => {
+  if (!blockDropOpen || e.target.closest('.block-filter')) return;
+  blockDropOpen = false;
+  const menu = $('#block-filter-menu');
+  if (menu) menu.hidden = true;
+  $('.block-drop')?.setAttribute('aria-expanded', 'false');
+});
 $('#filters').addEventListener('click', (e) => {
-  if (e.target.closest('[data-reset]')) { state.filters = defaultFilters(); filterLimit = 40; renderFilters(); renderExplorer(); recolor(); renderApi?.refresh(); return; }
+  if (e.target.closest('.block-drop')) { blockDropOpen = !blockDropOpen; renderFilters(); return; }
+  const blockOpt = e.target.closest('[data-filter-block]');
+  if (blockOpt) {
+    const id = blockOpt.dataset.filterBlock;
+    const next = !id || id === state.filters.block ? null : id;
+    blockDropOpen = false;
+    chooseBlock(next);
+    return;
+  }
+  if (e.target.closest('[data-reset]')) {
+    blockDropOpen = false;
+    state.filters = defaultFilters();
+    filterLimit = 40;
+    const keep = true;
+    if (renderMode) { renderApi?.setBlock(null); blockMenu?.refresh(); renderFilters(); renderExplorer(); recolor(); renderApi?.refresh(); syncHistory(); return; }
+    if (state.view === 'block' || state.view === 'floor') { setView('intro', { tower: null, floor: null, keepSheet: keep }); return; }
+    renderFilters(); renderExplorer(); recolor(); renderApi?.refresh();
+    return;
+  }
   if (e.target.closest('[data-more]')) { filterLimit += 40; renderFilters(); return; }
   if (e.target.closest('[data-close]')) { showOnly(basePanel()); syncHistory(); return; }
   const ab = e.target.closest('[data-apt]'); if (ab) { showOnly(basePanel()); selectApt(ab.dataset.apt); }
@@ -991,11 +1078,15 @@ const blockMenu = mountBlockMenu($('#block-menu-root'), {
   },
   selected: pickedBlock,
   onSelect(id) {
+    state.filters.block = id || null;
     if (renderMode) {
       renderApi?.setBlock(id);
       if (!id) clearRenderSelection();
       else if (blockOf(id)?.has_data) closeRenderSheet();
       blockMenu?.refresh();
+      if (!$('#filters').hidden) renderFilters();
+      renderApi?.refresh();
+      syncHistory();
       return;
     }
     if (!id) setView('intro', { tower: null, floor: null });
@@ -1084,9 +1175,11 @@ function renderHooks() {
     onFloor(id, floor) { setView('floor', { tower: id, floor }); },
     onSoon(id) { setView('block', { tower: id }); },
     onBlock(id) {
+      state.filters.block = id || null;
       if (renderMode && !id) clearRenderSelection();
       else if (renderMode && blockOf(id)?.has_data) closeRenderSheet();
       blockMenu?.refresh();
+      if (!$('#filters').hidden) renderFilters();
     },
   };
 }
