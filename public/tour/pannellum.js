@@ -545,6 +545,7 @@ function Renderer(container) {
      */
     this.resize = function() {
         var pixelRatio = window.devicePixelRatio || 1;
+        if (pixelRatio > 2 && (window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 900)) pixelRatio = 2;
         canvas.width = canvas.clientWidth * pixelRatio;
         canvas.height = canvas.clientHeight * pixelRatio;
         if (gl) {

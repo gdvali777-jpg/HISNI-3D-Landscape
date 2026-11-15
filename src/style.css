@@ -293,6 +293,26 @@ html.boot-render #loading { display: none !important; }
   #app.render-armed:not(.is-render) .layers { right: calc(60px + env(safe-area-inset-right)); }
   #app.is-render.render-armed .tools { bottom: calc(78px + env(safe-area-inset-bottom)); }
 }
+@media (max-width: 500px) {
+  #app.render-armed:not(.is-render) .layers {
+    left: calc(8px + env(safe-area-inset-left));
+    right: calc(60px + env(safe-area-inset-right));
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    overflow: visible;
+  }
+  #app.render-armed:not(.is-render) .layers .light { overflow: visible; flex: 1 1 auto; min-width: 0; }
+  #app.render-armed:not(.is-render) .layers .light button { min-width: max(44px, min-content); min-height: 44px; flex: 1 1 auto; padding: 0 8px; }
+  #app.render-armed:not(.is-render) footer {
+    max-width: calc(100vw - 230px - env(safe-area-inset-right));
+    max-height: 72px;
+    white-space: normal;
+    overflow: hidden;
+    line-height: 1.25;
+    z-index: 3;
+  }
+  .intro-actions { flex-wrap: nowrap; gap: 4px; min-height: 48px; }
+  .intro-actions .primary, .intro-actions .tour-cta, .intro-actions .call-btn { padding-left: 8px; padding-right: 8px; font-size: 13px; min-height: 44px; }
+}
 @media (max-width: 500px), (max-height: 500px) and (max-width: 960px) {
   html[data-view="block"] #app:has(#explorer:not([hidden])) .tools button:not(#tour-cam),
   html[data-view="floor"] #app:has(#explorer:not([hidden])) .tools button:not(#tour-cam),
@@ -528,7 +548,7 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
   .explorer h2 { font-size: 14px; line-height: 1.15; margin: 0 0 2px; }
   .explorer .legend { margin: 0 0 4px; }
   .explorer .note { margin-top: 4px; }
-  .sheet { left: calc(min(280px, 46vw) + 16px); right: calc(56px + env(safe-area-inset-right)); top: calc(48px + env(safe-area-inset-top)); bottom: calc(76px + env(safe-area-inset-bottom)); width: auto; max-height: none; }
+  .sheet { left: calc(min(280px, 46vw) + 16px); right: calc(72px + env(safe-area-inset-right)); top: calc(48px + env(safe-area-inset-top)); bottom: calc(76px + env(safe-area-inset-bottom)); width: auto; max-height: none; }
   .apt-card.sheet { display: flex; flex-direction: column; overflow: hidden; max-height: calc(100dvh - 124px); padding-bottom: 8px; }
   .apt-card .sheet-head { flex: none; }
   .apt-card .apt-body { overflow: auto; flex: 1 1 auto; min-height: 0; max-height: calc(100dvh - 220px); }
@@ -536,6 +556,8 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
   .apt-card.sheet { top: calc(56px + env(safe-area-inset-top)); }
   #app.is-render:has(#explorer:not([hidden])) .explorer { top: calc(112px + env(safe-area-inset-top)); }
   #app.is-render:has(#explorer:not([hidden])) .day-night { left: auto; right: calc(8px + env(safe-area-inset-right)); top: calc(112px + env(safe-area-inset-top)); bottom: auto; }
+  .apt-card .tabs { position: sticky; top: 0; z-index: 3; flex-wrap: nowrap; background: rgba(248,246,238,.98); padding-bottom: 4px; }
+  .apt-card .tabs button { flex: 1 1 0; min-width: 44px; padding: 0 6px; font-size: 12px; }
   .apt-card .cta-full { display: none; }
   .apt-card .cta-short { display: inline; }
   .apt-card .cta-row { flex: none; flex-wrap: nowrap; gap: 6px; padding: 6px 0 0; }
