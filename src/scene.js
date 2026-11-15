@@ -922,11 +922,22 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
       }
     }
     function portraitTowerGroup() {
-      if (!(h > w && w < 700)) return;
+      const portrait = h > w && w < 700;
+      const landscapeTowers = w > h && w < 1400 && document.documentElement.dataset.view === 'towers';
+      if (!portrait && !landscapeTowers) return;
       const group = items.filter((o) => o.it.isTower && o.vis);
       if (group.length < 4) return;
       const visible = group.filter((o) => o.it.el.style.opacity !== '0');
-      if (visible.length > 0 && visible.length < group.length) group.forEach((o) => hideLabel(o.it));
+      const clipped = (b) => b.l < 2 || b.t < 2 || b.r > w - 2 || b.b > h - 2;
+      let partial = visible.length > 0 && visible.length < group.length;
+      if (!partial && visible.length === group.length) {
+        for (let i = 0; i < visible.length && !partial; i++) {
+          const A = rectOf(visible[i].it);
+          if (clipped(A)) partial = true;
+          for (let j = i + 1; j < visible.length; j++) if (overlap(A, rectOf(visible[j].it))) partial = true;
+        }
+      }
+      if (partial) group.forEach((o) => hideLabel(o.it));
     }
   }
 
