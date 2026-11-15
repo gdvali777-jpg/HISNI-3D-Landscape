@@ -33,7 +33,7 @@ async function scan(page, where) {
 
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const page = await ctx.newPage();
-await page.goto(base + '?lang=en', { waitUntil: 'domcontentloaded' });
+await page.goto(base + '?view=3d&lang=en', { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(2500);
 await scan(page, 'overview');
 const block = page.locator('#block-btn');

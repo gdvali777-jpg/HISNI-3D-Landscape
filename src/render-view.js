@@ -107,8 +107,11 @@ export async function createRenderView(opts) {
     preload(hiRes(n));
   }
 
+  const fileOf = (s) => (s || '').split('?')[0].split('/').pop();
   function setImage(src) {
-    if ((img.getAttribute('src') || '') === src) return;
+    // The boot image and the module URL are the same file with different prefixes.
+    // Crossfading that pair painted a second copy late and became the LCP element.
+    if (fileOf(img.getAttribute('src')) === fileOf(src)) return;
     const prev = img.getAttribute('src');
     if (fade && prev) {
       fade.src = prev;
@@ -394,6 +397,9 @@ export async function createRenderView(opts) {
       root.hidden = false;
       document.documentElement.classList.add('boot-render');
       await showFrame(index, { immediate: true });
+      const dropBoot = () => { root.style.backgroundImage = 'none'; };
+      if (img.decode) img.decode().then(() => requestAnimationFrame(dropBoot)).catch(dropBoot);
+      else dropBoot();
       const nightFrame = allFrames.find((f) => f.mode === 'night');
       const preloadNight = () => { if (nightFrame) preload(`${BASE}${nightFrame.thumb}`); };
       if (window.requestIdleCallback) requestIdleCallback(preloadNight, { timeout: 1500 });

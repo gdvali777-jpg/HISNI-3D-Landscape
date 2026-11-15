@@ -68,7 +68,20 @@ function clearRenderSelection() {
   syncHistory();
 }
 let ctxPromise = null;
-const wantsRender = (p) => p.get('view') === 'render' || p.get('mode') === 'render';
+let histRender = false;
+let returnHomeToRender = false;
+// Render is the landing. 3D opens only for ?view=3d or a link that names a 3D-only target.
+// ?view=render and ?mode=render stay on the render, even when a block or floor is carried along.
+function wants3D(p) {
+  if (p.get('view') === 'render' || p.get('mode') === 'render') return false;
+  if (p.get('view') === '3d') return true;
+  if (p.get('apt') || p.get('tower') || p.get('floor')) return true;
+  const v = p.get('view');
+  if (v === 'block' || v === 'floor' || v === 'towers' || v === 'neighborhood') return true;
+  if (p.get('bg') === 'real' || p.get('webgl') === '0' || p.get('filters') === '1') return true;
+  if (p.get('quality') || p.get('light')) return true;
+  return false;
+}
 const defaultFilters = () => ({ kinds: new Set(), statuses: new Set(), areaMin: '', areaMax: '', floorMin: '', floorMax: '', priceMin: '', priceMax: '' });
 state.filters = defaultFilters();
 
@@ -107,8 +120,20 @@ function applyI18n() {
   syncPoi();
   if (state.place && !$('#place-card').hidden) showPlace(state.place);
   if ($('#about').open) openAbout();
+  paintViewToggle();
+}
+function paintViewToggle() {
   const toggle = $('#view-toggle');
-  if (toggle) { toggle.hidden = !app.classList.contains('render-armed'); toggle.textContent = renderMode ? t('view3d') : t('renderView'); toggle.setAttribute('aria-pressed', String(renderMode)); }
+  if (!toggle) return;
+  toggle.hidden = false;
+  const to3d = !!renderMode;
+  toggle.classList.toggle('to-3d', to3d);
+  const label = toggle.querySelector('.view-label');
+  const text = to3d ? t('view3d') : t('renderView');
+  if (label) label.textContent = text;
+  else toggle.textContent = text;
+  toggle.setAttribute('aria-label', text);
+  toggle.setAttribute('aria-pressed', String(to3d));
 }
 $('#lang').addEventListener('click', () => { setLang(getLang() === 'ka' ? 'en' : 'ka'); applyI18n(); syncHistory(); track('language', { lang: getLang() }); });
 const INTRO_KEY = 'hisni-intro';
@@ -211,7 +236,8 @@ let mapMode = null;
 function depthNow() { if (state.apt) return 4; return { intro: 0, towers: 1, block: 2, floor: 3 }[state.view] ?? 0; }
 function urlForState() {
   const p = new URLSearchParams();
-  if (mapMode === 'neighborhood' && state.view === 'intro' && !state.apt) p.set('view', 'neighborhood');
+  if (!renderMode && mapMode === 'neighborhood' && state.view === 'intro' && !state.apt) p.set('view', 'neighborhood');
+  else if (!renderMode && (!state.view || state.view === 'intro')) p.set('view', '3d');
   else if (state.view && state.view !== 'intro') p.set('view', state.view);
   if (state.tower && (state.view === 'block' || state.view === 'floor' || state.apt)) p.set('tower', state.tower);
   if (state.view === 'floor' && state.floor != null) p.set('floor', String(state.floor));
@@ -219,7 +245,7 @@ function urlForState() {
   if (getLang() === 'en') p.set('lang', 'en');
   if (bootQuery.get('webgl') === '0') p.set('webgl', '0');
   if (bootQuery.get('bg') === 'real') p.set('bg', 'real');
-  if (renderMode) { if (!p.get('view')) p.set('view', 'render'); else p.set('mode', 'render'); }
+  if (renderMode && p.get('view')) p.set('mode', 'render');
   const quality = bootQuery.get('quality'); if (quality) p.set('quality', quality);
   const light = bootQuery.get('light'); if (light) p.set('light', light);
   if (!$('#filters').hidden) p.set('filters', '1');
@@ -231,10 +257,13 @@ function syncHistory() {
   const url = urlForState();
   const d = depthNow();
   const here = location.pathname + location.search;
-  if (!seeded) { history.replaceState({ hisni: d }, '', url); seeded = true; histDepth = d; seedDepth = d; pushed = 0; return; }
-  if (d > histDepth && here !== url) { history.pushState({ hisni: d }, '', url); pushed += 1; }
-  else if (here !== url) history.replaceState({ hisni: d }, '', url);
+  if (!seeded) { history.replaceState({ hisni: d, render: renderMode }, '', url); seeded = true; histDepth = d; seedDepth = d; pushed = 0; histRender = renderMode; return; }
+  if (here === url) { histDepth = d; histRender = renderMode; return; }
+  const crossing = histRender !== renderMode;
+  if (crossing || d > histDepth) { history.pushState({ hisni: d, render: renderMode }, '', url); pushed += 1; }
+  else history.replaceState({ hisni: d, render: renderMode }, '', url);
   histDepth = d;
+  histRender = renderMode;
 }
 function applyDeepLink(params) {
   mapMode = params.get('view') === 'neighborhood' ? 'neighborhood' : null;
@@ -267,7 +296,7 @@ function seedHistory() {
     history.pushState({ hisni: depthNow() }, '', urlForState());
   }
   Object.assign(state, target);
-  seeded = true; seedDepth = 0; histDepth = d; pushed = d;
+  seeded = true; seedDepth = 0; histDepth = d; pushed = d; histRender = renderMode;
 }
 function renderShell() {
   paintIntro();
@@ -277,19 +306,41 @@ function renderShell() {
 function applyHistoryUrl() {
   const p = new URLSearchParams(location.search);
   const lang = p.get('lang');
-  if (lang === 'en' || lang === 'ka') { setLang(lang); applyI18n(); }
-  const want = wantsRender(p);
-  if (want && !renderMode) openRender();
-  if (!want && renderMode) { renderMode = false; app.classList.remove('is-render'); renderApi?.hide(); $('#view-toggle').textContent = t('renderView'); $('#view-toggle').setAttribute('aria-pressed', 'false'); }
-  mapMode = p.get('view') === 'neighborhood' ? 'neighborhood' : null;
-  state.apt = null;
-  const view = p.get('view') || 'intro';
-  if (p.get('apt')) selectApt(p.get('apt'));
-  else if (view === 'floor') setView('floor', { tower: p.get('tower'), floor: +(p.get('floor') || 6) });
-  else if (view === 'block') setView('block', { tower: p.get('tower') });
-  else if (view === 'towers') setView('towers', { tower: null });
-  else setView('intro', { tower: null, floor: null });
-  if (p.get('filters') === '1') { showOnly('filters'); renderFilters(); }
+  if (lang === 'en' || lang === 'ka') setLang(lang);
+  const toRender = !wants3D(p);
+  if (toRender) {
+    applyDeepLink(p);
+    if (!renderMode) openRender();
+    else {
+      const carry = (state.view === 'block' || state.view === 'floor') ? state.tower : null;
+      if (carry) renderApi?.setBlock(carry);
+      else renderApi?.home();
+    }
+    paintViewToggle();
+    return;
+  }
+  if (renderMode) {
+    renderMode = false;
+    app.classList.remove('is-render');
+    renderApi?.hide();
+  }
+  applyDeepLink(p);
+  paintViewToggle();
+  const show3D = () => {
+    if (state.apt && aptById(state.apt)) { setView('floor', { tower: state.tower, floor: state.floor, apt: state.apt }); renderCard(); }
+    else if (state.view === 'floor') setView('floor', { tower: state.tower, floor: state.floor });
+    else if (state.view === 'block') setView('block', { tower: state.tower });
+    else if (state.view === 'towers') setView('towers', { tower: null });
+    else setView('intro', { tower: null, floor: null });
+    if (p.get('filters') === '1') { showOnly('filters'); renderFilters(); }
+  };
+  if (!state.scene && !app.classList.contains('fallback')) {
+    const webgl = hasWebGL() && p.get('webgl') !== '0';
+    if (!webgl) { startFallback(); return; }
+    start3D(p, ctxPromise);
+    return;
+  }
+  show3D();
 }
 window.addEventListener('popstate', () => {
   fromPop = true;
@@ -699,7 +750,7 @@ $('#zoom-out').addEventListener('click', zoomOut);
 $('#rotate').addEventListener('click', (e) => { const on = state.scene?.toggleRotate(); e.currentTarget.setAttribute('aria-pressed', String(!!on)); });
 function goHome() {
   if (renderMode) { renderApi?.home(); return; }
-  if (app.classList.contains('render-armed')) {
+  if (returnHomeToRender) {
     openRender().then(() => { renderApi?.home(); syncHistory(); });
     return;
   }
@@ -938,9 +989,8 @@ function renderHooks() {
 async function openRender() {
   renderMode = true;
   app.classList.add('is-render', 'render-armed');
-  $('#view-toggle').hidden = false;
-  $('#view-toggle').textContent = t('view3d');
-  $('#view-toggle').setAttribute('aria-pressed', 'true');
+  paintViewToggle();
+  closeRenderSheet();
   if (!renderApi) {
     const { createRenderView } = await loadRenderView();
     renderApi = await createRenderView(renderHooks());
@@ -952,11 +1002,12 @@ async function openRender() {
   $('#loading').classList.add('done');
 }
 async function leaveRender() {
+  returnHomeToRender = true;
   renderMode = false;
   app.classList.remove('is-render');
+  app.classList.add('render-armed');
   renderApi?.hide();
-  $('#view-toggle').textContent = t('renderView');
-  $('#view-toggle').setAttribute('aria-pressed', 'false');
+  paintViewToggle();
   const carried = renderApi?.block() || null;
   if (carried) { state.view = 'block'; state.tower = carried; state.floor = null; state.apt = null; }
   else { state.view = 'intro'; state.tower = null; state.floor = null; state.apt = null; }
@@ -983,6 +1034,9 @@ async function boot() {
   bootQuery = params;
   const lang = params.get('lang');
   if (lang === 'en' || lang === 'ka') setLang(lang);
+  renderMode = !wants3D(params);
+  app.classList.add('render-armed');
+  if (renderMode) app.classList.add('is-render');
   applyI18n();
   ctxPromise = fetch(`${BASE}data/context.json`).then((r) => r.json());
   state.doc = await loadApartments(BASE);
@@ -991,8 +1045,6 @@ async function boot() {
   syncPoi();
   // Parse the landing URL before any history write. syncHistory used to replaceState
   // the overview while the query string was still unread, which wiped every deep link.
-  renderMode = wantsRender(params);
-  if (renderMode) app.classList.add('is-render', 'render-armed');
   applyDeepLink(params);
   seedHistory();
   document.documentElement.dataset.view = state.view;
