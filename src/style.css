@@ -50,7 +50,7 @@ button { cursor: pointer; }
 .tour-cta:hover { background: rgba(28,19,34,.06); }
 .call-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 16px; border-radius: 999px; border: 1.5px solid var(--navy); background: #fff; color: var(--navy); text-decoration: none; font-weight: 500; white-space: nowrap; }
 .call-btn:hover { background: var(--primary); border-color: var(--primary); color: var(--navy); }
-.intro.is-collapsed .intro-keep { display: flex; align-items: center; gap: 10px; }
+.intro.is-collapsed .intro-keep { display: flex; align-items: center; gap: 14px; }
 .intro.is-collapsed h1 { font-size: 22px; margin: 0; flex: none; }
 .intro.is-collapsed .intro-actions { flex: 1; min-width: 0; }
 .intro.is-collapsed .primary { width: auto; flex: 1; margin: 0; min-height: 44px; }
@@ -147,7 +147,8 @@ html[lang="en"] .stats small { min-height: 2.6em; }
 .filters h2 { margin: 0; font-size: 22px; }
 .filters { scroll-padding-bottom: 84px; }
 .block-drop { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 12px; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; font-weight: 500; text-align: left; }
-.block-drop-menu { display: grid; gap: 4px; margin-top: 6px; max-height: min(148px, 26dvh); overflow: auto; }
+.block-drop-backdrop { position: fixed; inset: 0; z-index: 38; background: transparent; }
+.block-drop-menu { position: fixed; z-index: 39; display: grid; gap: 4px; margin: 0; padding: 6px; max-height: none; overflow: visible; background: #fff; border-radius: 14px; box-shadow: var(--shadow); }
 .block-drop-menu[hidden] { display: none; }
 .block-drop-menu button { min-height: 44px; width: 100%; border: 0; border-radius: 12px; background: #fff; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 14px; text-align: left; }
 .block-drop-menu button[aria-selected="true"] { background: var(--navy); color: var(--cream); }
@@ -195,6 +196,8 @@ footer { position: absolute; right: 64px; bottom: 6px; font-size: 12px; color: v
 .label.poi .poi-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .label.poi .poi-min { color: #5c6a2c; font-weight: 700; flex: none; }
 .label.poi.is-compact .poi-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.label.poi.is-icon .poi-min { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.label.poi.is-icon button { width: 44px; min-width: 44px; height: 44px; padding: 0; justify-content: center; }
 .label.poi.is-hot button { box-shadow: 0 0 0 3px #E78E75; }
 .label::after { content: ''; position: absolute; left: 50%; top: 100%; width: 2px; height: var(--stem, 14px); margin-left: -1px; background: rgba(28,19,34,.5); }
 .night .label::after { background: rgba(239,235,212,.6); }
@@ -203,8 +206,7 @@ footer { position: absolute; right: 64px; bottom: 6px; font-size: 12px; color: v
 .label.tower button { background: var(--navy); color: var(--cream); padding: 0 14px; min-height: 44px; font-weight: 700; font-size: 14px; }
 .label.tower.num button { width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 0; border-radius: 50%; justify-content: center; }
 @media (max-height: 430px) {
-  .label.tower.num button { width: 40px; height: 40px; min-width: 40px; min-height: 40px; font-size: 13px; position: relative; }
-  .label.tower.num button::after { content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
+  .label.tower.num button { width: 44px; height: 44px; min-width: 44px; min-height: 44px; font-size: 13px; }
 }
 .label.tower.num.is-on button { box-shadow: 0 0 0 3px #E78E75; }
 .label.tower.data button { background: var(--primary); color: var(--navy); }
@@ -328,10 +330,10 @@ html.boot-render #loading { display: none !important; }
     max-height: calc(100dvh - 200px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     overflow: auto;
   }
-  .intro-actions { flex-wrap: nowrap; gap: 4px; min-height: 48px; }
-  .intro-actions .primary, .intro-actions .tour-cta, .intro-actions .call-btn { padding-left: 8px; padding-right: 8px; font-size: 13px; min-width: max(44px, min-content); min-height: 44px; }
-  #app.render-armed:not(.is-render) .intro.is-collapsed .intro-keep { flex-direction: column; align-items: stretch; gap: 6px; }
-  #app.render-armed:not(.is-render) .intro.is-collapsed .intro-actions { width: 100%; }
+  .intro-actions { flex-wrap: nowrap; gap: 8px; min-height: 48px; }
+  .intro-actions .primary, .intro-actions .tour-cta, .intro-actions .call-btn { padding-left: 8px; padding-right: 8px; font-size: 13px; min-width: max(44px, min-content); min-height: 44px; height: auto; box-sizing: border-box; }
+  #app.render-armed:not(.is-render) .intro.is-collapsed .intro-keep { flex-direction: column; align-items: stretch; gap: 8px; }
+  #app.render-armed:not(.is-render) .intro.is-collapsed .intro-actions { width: 100%; flex-wrap: wrap; gap: 14px; overflow: visible; }
   #app.render-armed:not(.is-render) .intro.is-collapsed { padding-left: 8px; padding-right: 8px; }
 }
 @media (max-width: 500px), (max-height: 500px) and (max-width: 960px) {
@@ -432,7 +434,7 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
 .tour-switch button { border: 0; border-radius: 999px; background: transparent; color: #eeecd5; min-height: 44px; padding: 0 16px; font-weight: 700; white-space: nowrap; }
 .tour-switch button[aria-pressed="true"] { background: #eeecd5; color: #17101e; }
 .tour-status { position: absolute; z-index: 6; left: 16px; right: 16px; top: 50%; transform: translateY(-50%); margin: 0; text-align: center; color: #17101e; background: rgba(248,246,238,.94); border-radius: 14px; padding: 16px; }
-.label.tour-pin button { background: #fff; color: var(--ink); font-weight: 650; width: 100%; box-sizing: border-box; }
+.label.tour-pin button { background: #fff; color: var(--ink); font-weight: 650; width: 100%; box-sizing: border-box; overflow: hidden; }
 .label.tour-pin .tour-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--navy); flex: none; }
 .label.tour-pin[data-view="1"] .tour-dot { background: #b5524a; }
 .label.tour-pin[data-view="2"] .tour-dot { background: #5b4b8a; }
@@ -547,10 +549,12 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
 @media (max-height: 520px) {
   .intro { left: calc(8px + env(safe-area-inset-left)); right: auto; top: auto; bottom: calc(52px + env(safe-area-inset-bottom)); width: min(280px, 46vw); height: auto; max-height: calc(100dvh - 108px); overflow: auto; padding: 6px 12px 8px; display: flex; flex-direction: column; }
   .intro.is-collapsed { top: auto; height: auto; max-height: none; overflow: visible; padding-bottom: 8px; }
+  .intro.is-collapsed .intro-keep { flex-direction: column; align-items: stretch; gap: 8px; }
+  .intro.is-collapsed .intro-actions { flex: none; width: 100%; flex-wrap: wrap; gap: 14px; overflow: visible; }
   .intro h1 { font-size: 22px; } .intro h1 em { font-size: 14px; margin-top: 2px; }
   .intro .intro-actions .primary { margin-top: 0; position: static; width: auto; }
   .intro.is-collapsed .primary { width: auto; margin-top: 0; }
-  .intro.is-collapsed .call-btn { min-height: 44px; }
+  .intro.is-collapsed .call-btn, .intro .intro-actions .call-btn { min-height: 44px; height: auto; box-sizing: border-box; }
   .block-picker { left: auto; right: calc(64px + env(safe-area-inset-right)); top: calc(max(6px, env(safe-area-inset-top)) + 50px); }
   #app.is-render .day-night { left: calc(8px + env(safe-area-inset-left)); right: auto; top: calc(max(6px, env(safe-area-inset-top)) + 50px); bottom: auto; flex-direction: row; border-radius: 999px; }
   .map-meta { top: auto; bottom: 8px; right: calc(64px + env(safe-area-inset-right)); }
