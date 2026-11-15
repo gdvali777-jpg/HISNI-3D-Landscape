@@ -63,6 +63,7 @@ export async function createRenderView(opts) {
   const root = document.querySelector('#render-view');
   const stage = document.querySelector('#render-stage');
   const img = document.querySelector('#render-img');
+  const blur = document.querySelector('#render-blur');
   const svg = document.querySelector('#render-svg');
   const tip = document.querySelector('#render-tip');
   if (!root || !stage || !img || !svg) return null;
@@ -72,6 +73,11 @@ export async function createRenderView(opts) {
   let index = 0;
   let selected = null;
   let zoom = null;
+  let viewZoom = 1;
+  let panX = 0;
+  let panY = 0;
+  let menuOpen = false;
+  let animLayout = false;
   let readySrc = '';
   const cache = new Map();
 
@@ -99,28 +105,35 @@ export async function createRenderView(opts) {
     preload(hiRes(n));
   }
 
+  function setImage(src) {
+    if (img.getAttribute('src') !== src) img.src = src;
+    if (blur && blur.getAttribute('src') !== src) blur.src = src;
+  }
   function layout() {
     const frame = frames[index];
     const box = root.getBoundingClientRect();
     if (!box.width || !box.height) return;
-    const sc = Math.max(box.width / frame.w, box.height / frame.h);
-    let w = frame.w * sc;
-    let h = frame.h * sc;
-    const [fx, fy] = frame.focal || [0.5, 0.42];
-    let left = box.width * 0.5 - fx * w;
-    let top = box.height * 0.42 - fy * h;
-    if (zoom) {
-      w *= zoom.scale;
-      h *= zoom.scale;
-      left = box.width * 0.55 - (zoom.x / frame.w) * w;
-      top = box.height * 0.46 - (zoom.y / frame.h) * h;
-    }
-    left = Math.min(0, Math.max(box.width - w, left));
-    top = Math.min(0, Math.max(box.height - h, top));
+    stage.classList.toggle('is-anim', animLayout);
+    // Contain-fit at zoom 1 so every tower is inside the screen. +/− and a selected block scale up from there.
+    const fit = Math.min(box.width / frame.w, box.height / frame.h) * viewZoom * (zoom?.scale || 1);
+    const w = frame.w * fit;
+    const h = frame.h * fit;
+    const [fx, fy] = zoom ? [zoom.x / frame.w, zoom.y / frame.h] : (frame.focal || [0.5, 0.42]);
+    let left = box.width * 0.5 - fx * w + panX;
+    let top = box.height * (zoom ? 0.46 : 0.42) - fy * h + panY;
+    if (w >= box.width) left = Math.min(0, Math.max(box.width - w, left));
+    else left = (box.width - w) / 2;
+    if (h >= box.height) top = Math.min(0, Math.max(box.height - h, top));
+    else top = (box.height - h) / 2;
     stage.classList.add('fitted');
     stage.style.width = `${w}px`;
     stage.style.height = `${h}px`;
     stage.style.transform = `translate(${left}px, ${top}px)`;
+  }
+  function setZoom(next) {
+    viewZoom = Math.min(3, Math.max(1, next));
+    if (viewZoom <= 1.001) { viewZoom = 1; panX = 0; panY = 0; }
+    layout();
   }
 
   function bandFill(block, floor) {
@@ -134,24 +147,38 @@ export async function createRenderView(opts) {
     return 'rgba(154,154,154,0.4)';
   }
 
-  function chipText(id) {
+  function chipText(id, compact) {
     const b = opts.block(id);
-    if (!b?.has_data) return `${id} ${opts.t('soon')}`;
-    return `${id} ${opts.freeCount(id)} ${opts.t('avail')}`;
+    if (!b?.has_data) return compact ? id : `${id} ${opts.t('soon')}`;
+    const n = opts.freeCount(id);
+    return compact ? `${id} ${n}` : `${id} ${n} ${opts.t('avail')}`;
   }
 
+  function paintBlockMenu() {
+    const btn = document.querySelector('#render-block-btn');
+    const menu = document.querySelector('#render-block-menu');
+    if (!btn || !menu) return;
+    const current = selected ? `${selected} ▾` : `${opts.t('block')} ▾`;
+    btn.textContent = current;
+    btn.setAttribute('aria-expanded', String(menuOpen));
+    btn.setAttribute('aria-label', selected ? `${opts.t('block')}: ${chipText(selected, false)}` : opts.t('block'));
+    const allOn = !selected;
+    const options = [`<button type="button" role="radio" data-block="" aria-checked="${allOn}" tabindex="${allOn ? 0 : -1}" class="${allOn ? 'is-on' : ''}">${opts.t('allBlocks')}</button>`];
+    for (const id of opts.blockIds()) {
+      const on = selected === id;
+      const count = opts.block(id)?.has_data ? opts.freeCount(id) : opts.t('soon');
+      options.push(`<button type="button" role="radio" data-block="${id}" aria-checked="${on}" tabindex="${on ? 0 : -1}" class="${on ? 'is-on' : ''}"><span>${id}</span><small>${count}</small></button>`);
+    }
+    menu.innerHTML = options.join('');
+    menu.hidden = !menuOpen;
+    menu.setAttribute('aria-label', opts.t('block'));
+  }
   function paintChrome() {
-    const chips = document.querySelector('#render-blocks');
     const dots = document.querySelector('#render-dots');
     const label = document.querySelector('#render-frame-label');
     const ph = document.querySelector('#render-ph');
     const frame = frames[index];
-    if (chips) {
-      chips.innerHTML = opts.blockIds().map((id) => {
-        const on = selected === id;
-        return `<button type="button" data-block="${id}" class="${on ? 'is-on' : ''} ${opts.block(id)?.has_data ? '' : 'is-soon'}" aria-pressed="${on}">${chipText(id)}</button>`;
-      }).join('');
-    }
+    paintBlockMenu();
     if (dots) {
       dots.innerHTML = frames.map((f, i) => `<button type="button" data-frame="${i}" class="${i === index ? 'is-on' : ''} ${f.stop ? 'is-stop' : ''}" aria-label="${f.label?.[opts.lang()] || f.id}" aria-current="${i === index ? 'true' : 'false'}"></button>`).join('');
     }
@@ -206,24 +233,29 @@ export async function createRenderView(opts) {
     const full = hiRes(frame);
     const showing = img.currentSrc || img.src || '';
     const already = showing.includes(frame.src) || (frame.small && showing.includes(frame.small));
-    if (!already && readySrc !== full) img.src = thumb;
+    if (!already && readySrc !== full) setImage(thumb);
     draw();
     warm(index);
     await preload(full);
     if (frames[index] !== frame) return;
-    img.src = full;
+    setImage(full);
     readySrc = full;
     img.alt = frame.label?.[opts.lang()] || 'Hisni';
   }
 
-  function selectBlock(id) {
-    if (!frames[index].blocks?.[id]) return;
-    selected = selected === id ? null : id;
+  function selectBlock(id, { toggle = true, closeMenu = true } = {}) {
+    if (id && !frames[index].blocks?.[id]) return;
+    if (!id) selected = null;
+    else if (toggle && selected === id) selected = null;
+    else selected = id;
     if (selected) {
-      const c = centroid(frames[index].blocks[id]);
-      zoom = { x: c[0], y: c[1], scale: 1.18 };
+      const c = centroid(frames[index].blocks[selected]);
+      zoom = { x: c[0], y: c[1], scale: 1.75 };
     } else zoom = null;
+    if (closeMenu) menuOpen = false;
+    animLayout = true;
     draw();
+    animLayout = false;
     if (selected && !opts.block(selected)?.has_data) opts.onSoon(selected);
   }
 
@@ -263,25 +295,50 @@ export async function createRenderView(opts) {
     else selectBlock(el.dataset.block);
   });
 
-  let dragX = 0; let dragAt = 0; let dragged = false; let pid = null; let suppressClick = false;
+  const pointers = new Map();
+  let dragX = 0; let dragY = 0; let dragAt = 0; let dragged = false; let pinchDist = 0; let suppressClick = false;
   stage.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('.render-panel, .render-spin, a, input, button')) return;
-    pid = e.pointerId;
+    if (e.target.closest('.render-panel, .render-spin, .tools, a, input, button')) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    stage.setPointerCapture?.(e.pointerId);
     dragX = e.clientX;
+    dragY = e.clientY;
     dragAt = index;
     dragged = false;
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      pinchDist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+    }
   });
   stage.addEventListener('pointermove', (e) => {
-    if (pid !== e.pointerId) return;
+    if (!pointers.has(e.pointerId)) return;
+    const prev = pointers.get(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size >= 2) {
+      const [a, b] = [...pointers.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      setZoom(viewZoom * (dist / (pinchDist || dist)));
+      pinchDist = dist;
+      dragged = true;
+      return;
+    }
     const dx = e.clientX - dragX;
-    if (Math.abs(dx) > 12) dragged = true;
+    const dy = e.clientY - dragY;
+    if (Math.hypot(dx, dy) > 12) dragged = true;
+    if (viewZoom > 1) {
+      panX += e.clientX - prev.x;
+      panY += e.clientY - prev.y;
+      layout();
+      return;
+    }
     const step = Math.round(-dx / 90);
     const next = dragAt + step;
     if (next !== index) showFrame(next, { immediate: true });
   });
   function endDrag(e) {
-    if (pid !== e.pointerId) return;
-    pid = null;
+    if (!pointers.has(e.pointerId)) return;
+    pointers.delete(e.pointerId);
+    pinchDist = 0;
     if (dragged) suppressClick = true;
     dragged = false;
   }
@@ -294,8 +351,18 @@ export async function createRenderView(opts) {
     if (prev || next) { showFrame(index + (prev ? -1 : 1)); return; }
     const dot = e.target.closest('[data-frame]');
     if (dot) { selected = null; zoom = null; showFrame(+dot.dataset.frame); return; }
-    const chip = e.target.closest('#render-blocks [data-block]');
-    if (chip) selectBlock(chip.dataset.block);
+    if (e.target.closest('#render-block-btn')) {
+      menuOpen = !menuOpen;
+      paintBlockMenu();
+      if (menuOpen) document.querySelector('#render-block-menu [aria-checked="true"]')?.focus();
+      return;
+    }
+    const opt = e.target.closest('#render-block-menu [role="radio"]');
+    if (opt) {
+      selectBlock(opt.dataset.block || null, { toggle: false });
+      document.querySelector('#render-block-btn')?.focus();
+      return;
+    }
     if (e.target.closest('[data-reset]')) { opts.resetFilters(); paintFilterForm(); draw(); }
   });
   root.addEventListener('input', (e) => {
@@ -305,12 +372,61 @@ export async function createRenderView(opts) {
     draw();
   });
 
+  document.querySelector('#render-blocks')?.addEventListener('keydown', (e) => {
+    const menu = document.querySelector('#render-block-menu');
+    const btn = document.querySelector('#render-block-btn');
+    if (!menu || !btn) return;
+    const radios = () => [...menu.querySelectorAll('[role="radio"]')];
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      menuOpen = false;
+      paintBlockMenu();
+      btn.focus();
+      return;
+    }
+    if (e.target === btn && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      e.stopPropagation();
+      menuOpen = true;
+      paintBlockMenu();
+      (menu.querySelector('[aria-checked="true"]') || menu.querySelector('[role="radio"]'))?.focus();
+      return;
+    }
+    if (!menuOpen || !e.target.closest('#render-block-menu')) return;
+    const list = radios();
+    const i = list.indexOf(document.activeElement);
+    const go = (n) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const el = list[(n + list.length) % list.length];
+      selectBlock(el?.dataset.block || null, { toggle: false, closeMenu: false });
+      document.querySelector(`#render-block-menu [data-block="${el?.dataset.block || ''}"]`)?.focus();
+    };
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') go(i + 1);
+    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') go((i < 0 ? 0 : i) - 1);
+    if (e.key === 'Home') go(0);
+    if (e.key === 'End') go(list.length - 1);
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      menuOpen = false;
+      paintBlockMenu();
+      btn.focus();
+    }
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if (!menuOpen || e.target.closest('#render-blocks')) return;
+    menuOpen = false;
+    paintBlockMenu();
+  });
   window.addEventListener('keydown', (e) => {
     if (root.hidden) return;
     if (e.target.matches('input, textarea')) return;
+    if (e.target.closest('#render-block-menu')) return;
     if (e.key === 'ArrowLeft') { e.preventDefault(); showFrame(index - 1); }
     if (e.key === 'ArrowRight') { e.preventDefault(); showFrame(index + 1); }
-    if (e.key === 'Escape' && selected) { selected = null; zoom = null; draw(); }
+    if (e.key === 'Escape' && selected) { selected = null; zoom = null; menuOpen = false; draw(); }
   });
   new ResizeObserver(() => { if (!root.hidden) layout(); }).observe(root);
 
@@ -323,5 +439,11 @@ export async function createRenderView(opts) {
     },
     hide() { root.hidden = true; tip.hidden = true; },
     refresh() { if (!root.hidden) { paintFilterForm(); draw(); } },
+    zoomBy(f) { setZoom(viewZoom * f); },
+    home() {
+      viewZoom = 1; panX = 0; panY = 0; selected = null; zoom = null; menuOpen = false;
+      animLayout = true;
+      showFrame(0, { immediate: true }).then(() => { animLayout = false; });
+    },
   };
 }

@@ -39,6 +39,7 @@
 <main id="app">
   <div id="viewport" role="region" tabindex="0" aria-label="3D view. Drag to orbit, scroll or pinch to zoom."></div>
   <div id="render-view" hidden>
+    <img id="render-blur" class="render-blur" alt="" aria-hidden="true" width="1243" height="1600" />
     <div id="render-stage">
       <img id="render-img" alt="" width="1243" height="1600" fetchpriority="high" />
       <svg id="render-svg" aria-hidden="false"></svg>
@@ -47,7 +48,10 @@
     <p id="render-ph" class="render-ph" hidden>Placeholder</p>
     <div id="render-tip" class="render-tip" hidden></div>
     <div class="render-panel">
-      <div id="render-blocks" class="render-blocks" role="group"></div>
+      <div id="render-blocks" class="render-blocks">
+        <button type="button" id="render-block-btn" class="render-block-btn" aria-haspopup="true" aria-expanded="false" aria-controls="render-block-menu"></button>
+        <div id="render-block-menu" class="render-block-menu" role="radiogroup" hidden></div>
+      </div>
       <form id="render-filters" class="render-filters"></form>
     </div>
     <div class="render-spin">
@@ -65,6 +69,8 @@
       var narrow = matchMedia('(max-width: 819px)').matches;
       img.src = narrow ? './renders/view-07-720.webp' : './renders/view-07.webp';
       img.alt = 'Hisni';
+      var blur = document.getElementById('render-blur');
+      if (blur) blur.src = img.src;
     }
   </script>
   <div id="labels"></div>

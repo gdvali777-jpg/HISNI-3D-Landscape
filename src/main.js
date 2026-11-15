@@ -256,6 +256,7 @@ window.addEventListener('popstate', () => {
 function setView(v, opts = {}) {
   expandSheet();
   Object.assign(state, { view: v }, opts);
+  document.documentElement.dataset.view = v;
   const S = state.scene;
   if (S) {
     if (v === 'intro') { S.clearFloor(); S.highlightTower(null); if (mapMode === 'neighborhood') S.views.neighborhood(); else S.views.overview(); }
@@ -621,10 +622,17 @@ $('#layers-toggle').addEventListener('click', (e) => { const o = $('#layer-optio
 document.querySelectorAll('[data-layer]').forEach((i) => i.addEventListener('change', () => { if (i.dataset.layer === 'labels') app.classList.toggle('hide-labels', !i.checked); else state.scene?.setLayer(i.dataset.layer, i.checked); }));
 document.querySelectorAll('[data-light]').forEach((b) => b.addEventListener('click', () => setLight(b.dataset.light)));
 function setLight(m) { state.light = m; document.querySelectorAll('[data-light]').forEach((x) => { x.classList.toggle('active', x.dataset.light === m); x.setAttribute('aria-pressed', String(x.dataset.light === m)); }); app.classList.toggle('night', m === 'night'); state.scene?.setLight(m); }
-$('#zoom-in').addEventListener('click', () => state.scene?.zoom(0.8));
-$('#zoom-out').addEventListener('click', () => state.scene?.zoom(1.25));
+function zoomIn() { if (renderMode) renderApi?.zoomBy(1.25); else state.scene?.zoom(0.8); }
+function zoomOut() { if (renderMode) renderApi?.zoomBy(0.8); else state.scene?.zoom(1.25); }
+$('#zoom-in').addEventListener('click', zoomIn);
+$('#zoom-out').addEventListener('click', zoomOut);
 $('#rotate').addEventListener('click', (e) => { const on = state.scene?.toggleRotate(); e.currentTarget.setAttribute('aria-pressed', String(!!on)); });
 function goHome() {
+  if (renderMode) { renderApi?.home(); return; }
+  if (app.classList.contains('render-armed')) {
+    openRender().then(() => { renderApi?.home(); syncHistory(); });
+    return;
+  }
   state.apt = null;
   if (pushed > 0) history.go(-pushed);
   else setView('intro', { tower: null, floor: null });
@@ -641,11 +649,17 @@ $('#reset').addEventListener('click', onHome);
 $('#reset').addEventListener('touchend', onHome, { passive: false });
 $('#reset').addEventListener('pointerup', (e) => { if (e.pointerType === 'touch') return; onHome(e); });
 document.addEventListener('keydown', (e) => {
-  if (e.target.closest('input, dialog')) return;
-  if (e.key === 'Escape') { if (!$('#apt-card').hidden) closeApt(); else if (!$('#filters').hidden || !$('#place-card').hidden) { showOnly(basePanel()); syncHistory(); } else if (state.view === 'floor') setView('block'); else if (state.view === 'block') setView('towers', { tower: null }); else if (state.view === 'towers') setView('intro'); }
+  if (e.target.closest('input, dialog, #render-block-menu')) return;
+  if (e.key === 'Escape') { if (!$('#apt-card').hidden) closeApt(); else if (!$('#filters').hidden || !$('#place-card').hidden) { showOnly(basePanel()); syncHistory(); } else if (renderMode) { /* render view clears its own selection */ } else if (state.view === 'floor') setView('block'); else if (state.view === 'block') setView('towers', { tower: null }); else if (state.view === 'towers') setView('intro'); }
+  if (renderMode) {
+    if (e.key === 'Home') { e.preventDefault(); $('#reset').click(); }
+    if (e.key === '+' || e.key === '=') zoomIn();
+    if (e.key === '-' || e.key === '_') zoomOut();
+    return;
+  }
   if (e.key === 'Home') $('#reset').click();
-  if (e.key === '+' || e.key === '=') state.scene?.zoom(0.8);
-  if (e.key === '-') state.scene?.zoom(1.25);
+  if (e.key === '+' || e.key === '=') zoomIn();
+  if (e.key === '-') zoomOut();
   if (e.key === 'ArrowLeft') { e.preventDefault(); state.scene?.nudge(0.18, 0); }
   if (e.key === 'ArrowRight') { e.preventDefault(); state.scene?.nudge(-0.18, 0); }
   if (e.key === 'ArrowUp') { e.preventDefault(); state.scene?.nudge(0, -0.08); }
@@ -742,6 +756,7 @@ async function boot() {
   if (renderMode) app.classList.add('is-render', 'render-armed');
   applyDeepLink(params);
   seedHistory();
+  document.documentElement.dataset.view = state.view;
   renderShell();
   if (params.get('filters') === '1') {
     showOnly('filters'); renderFilters();
