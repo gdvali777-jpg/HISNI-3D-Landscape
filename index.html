@@ -37,22 +37,23 @@
 </head>
 <body>
 <main id="app">
-  <div id="viewport" role="region" tabindex="0" aria-label="3D view. Drag to orbit, scroll or pinch to zoom."></div>
+  <div id="viewport" role="region" tabindex="0" aria-label="3D ხედი. გადაათრიე დასატრიალებლად, ორი თითით ან სქროლით — მასშტაბი."></div>
   <div id="render-view" hidden>
     <img id="render-blur" class="render-blur" alt="" aria-hidden="true" width="1243" height="1600" />
     <div id="render-stage">
       <img id="render-img" alt="" width="1243" height="1600" fetchpriority="high" />
+      <img id="render-fade" alt="" aria-hidden="true" width="1243" height="1600" />
       <svg id="render-svg" aria-hidden="false"></svg>
     </div>
     <div class="render-vignette" aria-hidden="true"></div>
     <p id="render-ph" class="render-ph" hidden>Placeholder</p>
     <div id="render-tip" class="render-tip" hidden></div>
     <div class="render-panel">
-      <div id="render-blocks" class="render-blocks">
-        <button type="button" id="render-block-btn" class="render-block-btn" aria-haspopup="true" aria-expanded="false" aria-controls="render-block-menu"></button>
-        <div id="render-block-menu" class="render-block-menu" role="radiogroup" hidden></div>
-      </div>
       <form id="render-filters" class="render-filters"></form>
+    </div>
+    <div class="day-night" role="group" id="day-night">
+      <button type="button" id="day-mode" aria-pressed="true"></button>
+      <button type="button" id="night-mode" aria-pressed="false"></button>
     </div>
     <div class="render-spin">
       <button type="button" data-spin="-1" data-i18n-aria="spinPrev">‹</button>
@@ -75,6 +76,20 @@
   </script>
   <div id="labels"></div>
 
+  <div id="block-picker" class="block-picker">
+    <div id="block-menu-root" class="render-blocks">
+      <button type="button" id="block-btn" class="render-block-btn" aria-haspopup="true" aria-expanded="false" aria-controls="block-menu"></button>
+      <div id="block-menu" class="render-block-menu" role="radiogroup" hidden></div>
+    </div>
+    <div class="places-wrap">
+      <button type="button" id="places-btn" class="places-btn" aria-expanded="false" aria-controls="places-panel"></button>
+      <div id="places-panel" class="places-panel" hidden>
+        <div id="places-cats" class="places-cats" role="group"></div>
+        <ul id="places-list" class="places-list"></ul>
+      </div>
+    </div>
+  </div>
+
   <header class="header">
     <a class="brand" href="https://biograpi.ge/" target="_blank" rel="noopener"><img src="./brand/hisni-dark.webp" alt="Hisni by Biograpi" width="150" height="43" /></a>
     <div class="header-right">
@@ -85,7 +100,7 @@
     </div>
   </header>
 
-  <div id="bg-switch" class="bg-switch" hidden role="group" aria-label="რეალური გარემო">
+  <div id="bg-switch" class="bg-switch" hidden role="group">
     <button type="button" data-pano="1" aria-pressed="false">1</button>
     <button type="button" data-pano="2" aria-pressed="false">2</button>
     <button type="button" data-pano="3" aria-pressed="false">3</button>

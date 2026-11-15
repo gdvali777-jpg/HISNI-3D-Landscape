@@ -3,6 +3,7 @@ import { t, getLang, setLang, STRINGS } from './i18n.js';
 import { loadApartments, submitLead, CONTACT } from './data/adapter.js';
 import { track } from './analytics.js';
 import { createRenderView } from './render-view.js';
+import { mountBlockMenu } from './block-menu.js';
 
 const BASE = import.meta.env.BASE_URL;
 const $ = (s, r = document) => r.querySelector(s);
@@ -30,7 +31,7 @@ const POIS = [
 ];
 POIS.forEach((p) => { if (p.min == null) p.min = Math.max(1, Math.round((p.m * 1.3) / 80)); });
 
-const state = { view: 'intro', tower: null, floor: null, apt: null, light: 'day', filters: null, scene: null, doc: null, planTab: '2d' };
+const state = { view: 'intro', tower: null, floor: null, apt: null, light: 'day', filters: null, scene: null, doc: null, planTab: '2d', place: null };
 let renderMode = false;
 let renderApi = null;
 let ctxPromise = null;
@@ -43,9 +44,15 @@ function applyI18n() {
   document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', `${el.textContent.trim()} ${t(el.dataset.i18nAria)}`); el.title = t(el.dataset.i18nAria); });
   $('#lang').textContent = t('lang');
-  $('#lang').setAttribute('aria-label', getLang() === 'ka' ? 'EN, ინგლისურზე გადართვა' : 'ქა, Switch to Georgian');
+  $('#lang').setAttribute('aria-label', getLang() === 'ka' ? t('langToEn') : t('langToKa'));
   $('#about-open')?.setAttribute('aria-label', t('about'));
   $('#hint-ok')?.setAttribute('aria-label', t('close'));
+  $('#viewport')?.setAttribute('aria-label', t('viewportAria'));
+  $('#bg-switch')?.setAttribute('aria-label', t('bgReal'));
+  $('#day-night')?.setAttribute('aria-label', `${t('day')} / ${t('night')}`);
+  document.title = t('docTitle');
+  const desc = document.querySelector('meta[name="description"]');
+  if (desc) desc.setAttribute('content', t('docDesc'));
   const hintP = $('#hint p');
   if (hintP) hintP.textContent = t(matchMedia('(hover: hover) and (pointer: fine)').matches ? 'hintMouse' : 'hint');
   document.querySelectorAll('[data-call]').forEach((a) => { a.href = CONTACT.tel; });
@@ -62,10 +69,15 @@ function applyI18n() {
   paintIntro();
   renderLabels(); renderExplorer(); renderCard(); state.scene?.request(); if (!$('#filters').hidden) renderFilters();
   renderApi?.refresh();
+  blockMenu?.refresh();
+  paintPlaces();
+  syncPoi();
+  if (state.place && !$('#place-card').hidden) showPlace(state.place);
+  if ($('#about').open) openAbout();
   const toggle = $('#view-toggle');
   if (toggle) { toggle.hidden = !app.classList.contains('render-armed'); toggle.textContent = renderMode ? t('view3d') : t('renderView'); toggle.setAttribute('aria-pressed', String(renderMode)); }
 }
-$('#lang').addEventListener('click', () => { setLang(getLang() === 'ka' ? 'en' : 'ka'); applyI18n(); track('language', { lang: getLang() }); });
+$('#lang').addEventListener('click', () => { setLang(getLang() === 'ka' ? 'en' : 'ka'); applyI18n(); syncHistory(); track('language', { lang: getLang() }); });
 const INTRO_KEY = 'hisni-intro';
 function introCollapsedDefault() {
   const saved = sessionStorage.getItem(INTRO_KEY);
@@ -269,6 +281,8 @@ function setView(v, opts = {}) {
   renderCrumbs(); renderExplorer();
   const body = $('#explorer-body'); if (body) body.scrollTop = 0;
   syncHistory();
+  blockMenu?.refresh();
+  markTowerBadges();
   track('view_change', { view: state.view, tower: state.tower || '', floor: state.floor ?? '' });
 }
 const floorApts = () => state.doc.apartments.filter((a) => a.block === state.tower && a.floor === state.floor);
@@ -588,9 +602,9 @@ const labelEls = [];
 function renderLabels() {
   const L = getLang();
   labelEls.forEach(({ el, poi, tower }) => {
-    if (poi) { el.querySelector('.full').textContent = `${poi[L]} · ${poi.min} ${t('walk')}`; el.querySelector('.short').textContent = `${poi['s' + L] || poi[L]} · ${poi.min} ${L === 'ka' ? 'წთ' : 'min'}`; }
-    if (tower) el.querySelector('span').textContent = towerName(tower);
-    if (el.classList.contains('project')) el.querySelector('span').textContent = L === 'ka' ? 'ჰისნი' : 'Hisni';
+    if (poi) { el.querySelector('.full').textContent = `${poi[L]} · ${poi.min} ${t('walk')}`; el.querySelector('.short').textContent = `${poi['s' + L] || poi[L]} · ${poi.min} ${t('minShort')}`; el.querySelector('button').setAttribute('aria-label', `${poi[L]}, ${poi.min} ${t('walk')}`); }
+    if (tower) { el.querySelector('span').textContent = tower; el.querySelector('button').setAttribute('aria-label', towerName(tower)); }
+    if (el.classList.contains('project')) el.querySelector('span').textContent = t('projectName');
   });
 }
 function makeLabels(S) {
@@ -598,28 +612,38 @@ function makeLabels(S) {
   for (const p of POIS) {
     const el = document.createElement('div'); el.className = `label ${p.cat}`; el.innerHTML = `<button><i>${p.icon}</i><span class="full"></span><span class="short"></span></button>`;
     el.querySelector('button').addEventListener('click', () => showPlace(p)); root.appendChild(el); labelEls.push({ el, poi: p });
-    if (!['metro', 'school', 'bus'].includes(p.cat)) el.dataset.pri = 'low';
     const rank = { metro: -1, school: 3, bus: 4 };
     S.addLabel(el, { x: p.x, y: 6, z: p.z }, rank[p.cat] ?? 12 + POIS.indexOf(p), false);
   }
   for (const b of state.doc.blocks) {
-    const el = document.createElement('div'); el.className = `label tower ${b.has_data ? 'data' : ''}`; el.innerHTML = '<button><span></span></button>';
+    const el = document.createElement('div'); el.className = `label tower num ${b.has_data ? 'data' : ''}`; el.innerHTML = '<button><span></span></button>';
     el.querySelector('button').addEventListener('click', () => setView('block', { tower: b.id })); root.appendChild(el); labelEls.push({ el, tower: b.id });
     S.addLabel(el, S.towerLabelPos(b.id), 1, true);
   }
   renderLabels();
+  syncPoi();
+  markTowerBadges();
 }
 function showPlace(p) {
+  state.place = p;
   const el = $('#place-card'); const L = getLang();
   el.innerHTML = `<div class="sheet-head"><div><p class="eyebrow">${t('poiCat')[p.cat]}</p><h3>${esc(p[L])}</h3><p>${p.min} ${t('walk')}${p.src === 'client' ? '' : ' (' + t('approx') + ')'}</p></div><button class="x" aria-label="${t('close')}">×</button></div>`;
   showOnly('place');
-  el.querySelector('.x').onclick = () => showOnly(basePanel());
+  el.querySelector('.x').onclick = () => { state.place = null; showOnly(basePanel()); };
 }
 
 // ---------- controls ----------
 $('#start').addEventListener('click', () => setView('towers'));
 $('#layers-toggle').addEventListener('click', (e) => { const o = $('#layer-options'); o.hidden = !o.hidden; e.currentTarget.setAttribute('aria-expanded', String(!o.hidden)); });
-document.querySelectorAll('[data-layer]').forEach((i) => i.addEventListener('change', () => { if (i.dataset.layer === 'labels') app.classList.toggle('hide-labels', !i.checked); else state.scene?.setLayer(i.dataset.layer, i.checked); }));
+document.querySelectorAll('[data-layer]').forEach((i) => i.addEventListener('change', () => {
+  if (i.dataset.layer === 'labels') {
+    app.classList.toggle('hide-labels', !i.checked);
+    if (!i.checked) enabledCats.clear();
+    else placeCats().forEach((c) => { if (['metro', 'school', 'bus'].includes(c)) enabledCats.add(c); });
+    paintPlaces();
+    syncPoi();
+  } else state.scene?.setLayer(i.dataset.layer, i.checked);
+}));
 document.querySelectorAll('[data-light]').forEach((b) => b.addEventListener('click', () => setLight(b.dataset.light)));
 function setLight(m) { state.light = m; document.querySelectorAll('[data-light]').forEach((x) => { x.classList.toggle('active', x.dataset.light === m); x.setAttribute('aria-pressed', String(x.dataset.light === m)); }); app.classList.toggle('night', m === 'night'); state.scene?.setLight(m); }
 function zoomIn() { if (renderMode) renderApi?.zoomBy(1.25); else state.scene?.zoom(0.8); }
@@ -669,6 +693,7 @@ document.addEventListener('keydown', (e) => {
 function showHint() {
   if (localStorage.getItem('hisni-hint')) return;
   const h = $('#hint'); h.hidden = false;
+  state.scene?.request();
   let closed = false;
   const done = () => {
     if (closed) return;
@@ -692,6 +717,103 @@ function showHint() {
 // cheap capability check; real context creation failure is handled in boot()
 function hasWebGL() { return !!(window.WebGL2RenderingContext || window.WebGLRenderingContext); }
 
+const PLACE_ORDER = ['metro', 'school', 'kinder', 'health', 'bus', 'shop', 'bank'];
+const enabledCats = new Set(['metro', 'school', 'bus']);
+let placesOpen = false;
+function placeCats() {
+  const present = new Set(POIS.map((p) => p.cat));
+  return PLACE_ORDER.filter((c) => present.has(c));
+}
+function paintPlaces() {
+  const btn = $('#places-btn');
+  const panel = $('#places-panel');
+  const cats = $('#places-cats');
+  const list = $('#places-list');
+  if (!btn || !panel || !cats || !list) return;
+  const allOn = placeCats().every((c) => enabledCats.has(c));
+  btn.textContent = t('places');
+  btn.setAttribute('aria-expanded', String(placesOpen));
+  btn.setAttribute('aria-label', t('places'));
+  panel.hidden = !placesOpen;
+  $('#places-panel')?.setAttribute('aria-label', t('places'));
+  const buttons = [`<button type="button" data-cat="all" aria-pressed="${allOn}">${t('placesAll')}</button>`];
+  for (const c of placeCats()) {
+    buttons.push(`<button type="button" data-cat="${c}" aria-pressed="${enabledCats.has(c)}">${t('poiCat')[c]}</button>`);
+  }
+  cats.innerHTML = buttons.join('');
+  const L = getLang();
+  const rows = POIS.filter((p) => enabledCats.has(p.cat));
+  list.innerHTML = rows.map((p) => `<li><span>${esc(p[L])}</span><small>${p.min} ${esc(t('walk'))}</small></li>`).join('');
+}
+function syncPoi() {
+  const hideAll = app.classList.contains('hide-labels');
+  labelEls.forEach(({ el, poi }) => {
+    if (!poi) return;
+    const on = enabledCats.has(poi.cat) && !hideAll;
+    el.hidden = !on;
+    el.classList.toggle('poi-on', on);
+  });
+  const box = document.querySelector('[data-layer="labels"]');
+  if (box) box.checked = enabledCats.size > 0 && !hideAll;
+  state.scene?.request();
+}
+function markTowerBadges() {
+  labelEls.forEach(({ el, tower }) => {
+    if (!tower) return;
+    el.classList.toggle('is-on', !!tower && tower === state.tower && (state.view === 'block' || state.view === 'floor'));
+  });
+}
+function pickedBlock() {
+  if (renderMode) return renderApi?.block() || null;
+  if (state.view === 'block' || state.view === 'floor') return state.tower || null;
+  return null;
+}
+const blockMenu = mountBlockMenu($('#block-menu-root'), {
+  t,
+  blocks: () => state.doc?.blocks || [],
+  freeCount,
+  optionLabel: (id) => {
+    const b = blockOf(id);
+    if (!b?.has_data) return `${id} ${t('soon')}`;
+    return `${id} ${freeCount(id)} ${t('avail')}`;
+  },
+  selected: pickedBlock,
+  onSelect(id) {
+    if (renderMode) {
+      renderApi?.setBlock(id);
+      return;
+    }
+    if (!id) setView('intro', { tower: null, floor: null });
+    else setView('block', { tower: id });
+  },
+});
+$('#places-btn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  placesOpen = !placesOpen;
+  blockMenu?.close();
+  paintPlaces();
+});
+$('#places-cats')?.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-cat]');
+  if (!b) return;
+  const cat = b.dataset.cat;
+  if (cat === 'all') {
+    const cats = placeCats();
+    const allOn = cats.every((c) => enabledCats.has(c));
+    enabledCats.clear();
+    if (!allOn) cats.forEach((c) => enabledCats.add(c));
+  } else if (enabledCats.has(cat)) enabledCats.delete(cat);
+  else enabledCats.add(cat);
+  if (enabledCats.size) app.classList.remove('hide-labels');
+  else app.classList.add('hide-labels');
+  paintPlaces();
+  syncPoi();
+});
+document.addEventListener('pointerdown', (e) => {
+  if (!placesOpen || e.target.closest('.places-wrap')) return;
+  placesOpen = false;
+  paintPlaces();
+});
 function renderHooks() {
   return {
     t, lang: getLang, tel: () => CONTACT.tel, towerName, statusLabel,
@@ -711,6 +833,7 @@ function renderHooks() {
     resetFilters() { state.filters = defaultFilters(); renderExplorer(); recolor(); if (!$('#filters').hidden) renderFilters(); },
     onFloor(id, floor) { setView('floor', { tower: id, floor }); },
     onSoon(id) { setView('block', { tower: id }); },
+    onBlock() { blockMenu?.refresh(); },
   };
 }
 async function openRender() {
@@ -720,7 +843,10 @@ async function openRender() {
   $('#view-toggle').textContent = t('view3d');
   $('#view-toggle').setAttribute('aria-pressed', 'true');
   if (!renderApi) renderApi = await createRenderView(renderHooks());
+  const carry = (state.view === 'block' || state.view === 'floor') ? state.tower : null;
   await renderApi?.show();
+  if (carry) renderApi?.setBlock(carry);
+  blockMenu?.refresh();
   $('#loading').classList.add('done');
 }
 async function leaveRender() {
@@ -729,6 +855,11 @@ async function leaveRender() {
   renderApi?.hide();
   $('#view-toggle').textContent = t('renderView');
   $('#view-toggle').setAttribute('aria-pressed', 'false');
+  const carried = renderApi?.block() || null;
+  if (carried) { state.view = 'block'; state.tower = carried; state.floor = null; state.apt = null; }
+  else { state.view = 'intro'; state.tower = null; state.floor = null; state.apt = null; }
+  document.documentElement.dataset.view = state.view;
+  const hadScene = !!state.scene;
   if (!state.scene) {
     const webgl = hasWebGL() && bootQuery.get('webgl') !== '0';
     if (!webgl) startFallback();
@@ -737,6 +868,9 @@ async function leaveRender() {
     }
   }
   showOnly(state.view === 'intro' ? 'intro' : 'explorer');
+  if (hadScene && state.view === 'block') setView('block', { tower: state.tower });
+  else if (hadScene && state.view === 'intro') setView('intro', { tower: null, floor: null });
+  blockMenu?.refresh();
   syncHistory();
 }
 $('#view-toggle')?.addEventListener('click', () => { if (renderMode) leaveRender(); else openRender().then(() => syncHistory()); });
@@ -750,6 +884,9 @@ async function boot() {
   applyI18n();
   ctxPromise = fetch(`${BASE}data/context.json`).then((r) => r.json());
   state.doc = await loadApartments(BASE);
+  blockMenu?.refresh();
+  paintPlaces();
+  syncPoi();
   // Parse the landing URL before any history write. syncHistory used to replaceState
   // the overview while the query string was still unread, which wiped every deep link.
   renderMode = wantsRender(params);
