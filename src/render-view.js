@@ -245,7 +245,7 @@ export async function createRenderView(opts) {
     img.alt = frame.label?.[opts.lang()] || 'Hisni';
   }
 
-  function selectBlock(id, { toggle = true, notify = false } = {}) {
+  function selectBlock(id, { toggle = true, notify = false, soon = true } = {}) {
     if (id && !frames[index]?.blocks?.[id]) return;
     if (!id) selected = null;
     else if (toggle && selected === id) selected = null;
@@ -258,7 +258,8 @@ export async function createRenderView(opts) {
     draw();
     animLayout = false;
     if (notify) opts.onBlock?.(selected);
-    if (selected && !opts.block(selected)?.has_data) opts.onSoon(selected);
+    // Filter and header picks apply the block even when it has no inventory. The polygon tap still explains that.
+    if (soon && selected && !opts.block(selected)?.has_data) opts.onSoon(selected);
   }
 
   function hoverTip(el, ev) {
@@ -415,7 +416,7 @@ export async function createRenderView(opts) {
     refresh() { if (!root.hidden) { paintFilterForm(); draw(); } },
     zoomBy(f) { setZoom(viewZoom * f); },
     block() { return selected; },
-    setBlock(id) { selectBlock(id || null, { toggle: false, notify: false }); },
+    setBlock(id) { selectBlock(id || null, { toggle: false, notify: false, soon: false }); },
     mode() { return mode; },
     home() {
       viewZoom = 1; panX = 0; panY = 0; selected = null; zoom = null;

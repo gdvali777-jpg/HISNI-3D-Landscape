@@ -250,10 +250,15 @@ function urlForState() {
   if (getLang() === 'en') p.set('lang', 'en');
   if (bootQuery.get('webgl') === '0') p.set('webgl', '0');
   if (bootQuery.get('bg') === 'real') p.set('bg', 'real');
-  if (renderMode) p.set('mode', 'render');
   const quality = bootQuery.get('quality'); if (quality) p.set('quality', quality);
   const light = bootQuery.get('light'); if (light) p.set('light', light);
   if (!$('#filters').hidden && !skipFiltersParam) p.set('filters', '1');
+  // A bare render landing needs no mode flag. Add it only when another param would open 3D on reload.
+  const view = p.get('view');
+  const forces3d = view === '3d' || view === 'block' || view === 'floor' || view === 'towers' || view === 'neighborhood'
+    || p.get('apt') || p.get('tower') || p.get('floor') || p.get('filters') === '1'
+    || p.get('bg') === 'real' || p.get('webgl') === '0' || p.get('quality') || p.get('light');
+  if (renderMode && forces3d) p.set('mode', 'render');
   const q = p.toString();
   return location.pathname + (q ? `?${q}` : '');
 }
@@ -791,9 +796,20 @@ function placeBlockMenu() {
   menu.style.width = `${Math.round(Math.min(r.width, window.innerWidth - 16))}px`;
 }
 function swallowBlockEvent() {
-  blockSwallow = true;
-  clearTimeout(swallowBlockEvent.timer);
-  swallowBlockEvent.timer = setTimeout(() => { blockSwallow = false; }, 450);
+  blockSwallow = performance.now();
+}
+function closeBlockMenu() {
+  blockDropOpen = false;
+  document.querySelectorAll('body > .block-drop-menu, body > .block-drop-backdrop').forEach((n) => n.remove());
+  const menu = document.getElementById('block-filter-menu');
+  if (menu) menu.hidden = true;
+  document.querySelector('#filters .block-drop')?.setAttribute('aria-expanded', 'false');
+}
+function pickFilterBlock(id) {
+  const next = !id || id === state.filters.block ? null : id;
+  closeBlockMenu();
+  swallowBlockEvent();
+  chooseBlock(next);
 }
 function readFilters() {
   const fd = new FormData($('#ff')); const f = state.filters;
@@ -803,29 +819,31 @@ function readFilters() {
 }
 let fT; let filterLimit = 40;
 $('#filters').addEventListener('input', () => { clearTimeout(fT); fT = setTimeout(() => { readFilters(); const foc = document.activeElement?.name; renderFilters(); if (foc) $(`#filters [name="${foc}"]`)?.focus(); renderExplorer(); recolor(); renderApi?.refresh(); }, 250); });
-document.addEventListener('click', (e) => {
-  if (!blockSwallow) return;
-  blockSwallow = false;
-  if (e.target.closest('.block-drop')) return;
-  e.preventDefault();
-  e.stopPropagation();
-}, true);
-document.addEventListener('pointerup', (e) => {
+document.addEventListener('pointerdown', (e) => {
   const backdrop = e.target.closest('[data-block-backdrop]');
   const blockOpt = e.target.closest('[data-filter-block]');
   if (!backdrop && !blockOpt) return;
   e.preventDefault();
   e.stopPropagation();
-  swallowBlockEvent();
-  if (backdrop) { blockDropOpen = false; renderFilters(); return; }
-  const id = blockOpt.dataset.filterBlock;
-  const next = !id || id === state.filters.block ? null : id;
-  blockDropOpen = false;
-  chooseBlock(next);
-});
+  if (backdrop) { closeBlockMenu(); renderFilters(); swallowBlockEvent(); return; }
+  pickFilterBlock(blockOpt.dataset.filterBlock);
+}, true);
+const blockClickStale = () => typeof blockSwallow === 'number' && performance.now() - blockSwallow < 500;
+document.addEventListener('click', (e) => {
+  if (blockClickStale() && e.target.closest('.block-drop, [data-filter-block], [data-block-backdrop]')) {
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+  const blockOpt = e.target.closest('[data-filter-block]');
+  if (!blockOpt) return;
+  e.preventDefault();
+  e.stopPropagation();
+  pickFilterBlock(blockOpt.dataset.filterBlock);
+}, true);
 $('#filters').addEventListener('click', (e) => {
+  if (blockClickStale() && e.target.closest('.block-drop')) { e.preventDefault(); e.stopPropagation(); return; }
   if (e.target.closest('.block-drop')) { e.preventDefault(); e.stopPropagation(); blockDropOpen = !blockDropOpen; renderFilters(); return; }
-  if (blockSwallow) { e.preventDefault(); e.stopPropagation(); blockSwallow = false; return; }
   if (e.target.closest('[data-filter-block]') || e.target.closest('[data-block-backdrop]')) { e.preventDefault(); e.stopPropagation(); return; }
   if (e.target.closest('[data-reset]')) {
     blockDropOpen = false;
@@ -843,7 +861,17 @@ $('#filters').addEventListener('click', (e) => {
   const ab = e.target.closest('[data-apt]'); if (ab) { showOnly(basePanel()); selectApt(ab.dataset.apt); }
 });
 $('#filter-open').addEventListener('click', () => {
-  if ($('#filters').hidden) { filterLimit = 40; showOnly('filters'); renderFilters(); $('#filters input')?.focus(); }
+  if ($('#filters').hidden) {
+    filterLimit = 40;
+    blockDropOpen = false;
+    showOnly('filters');
+    const sheet = $('#filters');
+    sheet.scrollTop = 0;
+    renderFilters();
+    sheet.scrollTop = 0;
+    $('#filters input')?.focus({ preventScroll: true });
+    requestAnimationFrame(() => { sheet.scrollTop = 0; });
+  }
   else showOnly(basePanel());
 });
 
