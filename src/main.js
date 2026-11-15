@@ -751,7 +751,11 @@ function renderFilters() {
   const group = (a) => (a.status === 'available' ? 0 : a.status === 'queue' ? 1 : a.status === 'reserved' ? 2 : a.status === 'sold' ? 3 : 4);
   const priceKey = (a) => (showsPrice(a) ? Number(a.price_usd) : Number.POSITIVE_INFINITY);
   const res = state.doc.apartments.filter((a) => matches(a)).sort((x, y) => group(x) - group(y) || priceKey(x) - priceKey(y) || x.block.localeCompare(y.block) || x.floor - y.floor);
-  const viewCount = state.doc.apartments.filter((a) => a.status === 'available' && (!f.block || a.block === f.block) && (!f.kinds.size || f.kinds.has(a.type.kind))).length;
+  const rangeOn = ['areaMin', 'areaMax', 'floorMin', 'floorMax', 'priceMin', 'priceMax'].some((k) => f[k] !== '');
+  // A status chip or a range uses the full result list. Otherwise a chosen block counts available homes of that block and type.
+  const viewCount = (f.statuses.size || rangeOn)
+    ? res.length
+    : state.doc.apartments.filter((a) => a.status === 'available' && (!f.block || a.block === f.block) && (!f.kinds.size || f.kinds.has(a.type.kind))).length;
   const kinds = ['studio', '1br', '2br'], sts = STATUSES;
   el.innerHTML = `<div class="sheet-head"><h2>${t('filters')}</h2><button class="x" data-close aria-label="${t('close')}">×</button></div>
     <form id="ff">
