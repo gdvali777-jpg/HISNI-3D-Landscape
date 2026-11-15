@@ -18,6 +18,15 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 // Points of interest. Coordinates: local metres (x east, z south) from the OSM snapshot.
 // Walking times for metro/school are the client's figures; others = straight-line × 1.3 at 80 m/min (approx.).
+const POI_ICON = {
+  metro: '<svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="13" fill="#8A9B48"/><path fill="#fff" d="M8 20V8h2.4l3.6 6.2L17.6 8H20v12h-2.1v-7.2L14.6 20h-1.2l-3.3-7.2V20H8z"/></svg>',
+  school: '<svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="13" fill="#8A9B48"/><path fill="#fff" d="M14 7 6 11l8 4 8-4-8-4zm-6 6.2V18c0 1.6 2.7 3 6 3s6-1.4 6-3v-4.8l-6 3-6-3z"/></svg>',
+  kinder: '<svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="13" fill="#E78E75"/><circle cx="14" cy="11" r="3" fill="#fff"/><path fill="#fff" d="M8.5 20c.6-2.6 2.8-4 5.5-4s4.9 1.4 5.5 4H8.5z"/></svg>',
+  health: '<svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="13" fill="#E78E75"/><path fill="#fff" d="M12 8h4v4h4v4h-4v4h-4v-4H8v-4h4V8z"/></svg>',
+  bus: '<svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="13" fill="#8A9B48"/><path fill="#fff" d="M9 9h10a2 2 0 0 1 2 2v7h-1.2a1.8 1.8 0 0 1-3.6 0h-4.4a1.8 1.8 0 0 1-3.6 0H7v-7a2 2 0 0 1 2-2zm1.2 2.2V14h7.6v-2.8H10.2zm8.8 0V14H19v-2.8h-.0z"/></svg>',
+  shop: '<svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="13" fill="#E78E75"/><path fill="#fff" d="M9 11h10l-1 8H10l-1-8zm2.2-2.2a2.8 2.8 0 0 1 5.6 0V11h-2V8.8a.8.8 0 0 0-1.6 0V11h-2V8.8z"/></svg>',
+  bank: '<svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="13" fill="#8A9B48"/><path fill="#fff" d="M14 7 7 11v1.4h14V11L14 7zm-5.2 4.2V18H11v-6.8H8.8zm4.1 0V18h2.2v-6.8h-2.2zm4.2 0V18H19v-6.8h-2zm-9 7.2h12.2V20H8.1v-1.6z"/></svg>',
+};
 const POIS = [
   { id: 'metro', cat: 'metro', icon: 'M', x: 151, z: -82, ka: 'მეტროსადგური „ისანი“', en: 'Isani metro station', ska: 'მეტრო', sen: 'Metro', min: 2, src: 'client' },
   { id: 'school', cat: 'school', icon: '87', x: -120, z: -140, ka: 'ვაჟა-ფშაველას სახ. №87 საჯარო სკოლა', en: 'Public School No. 87 (Vazha-Pshavela)', ska: 'სკოლა', sen: 'School', min: 2, src: 'client' },
@@ -626,7 +635,12 @@ const labelEls = [];
 function renderLabels() {
   const L = getLang();
   labelEls.forEach(({ el, poi, tower }) => {
-    if (poi) { el.querySelector('.full').textContent = `${poi[L]} · ${poi.min} ${t('walk')}`; el.querySelector('.short').textContent = `${poi['s' + L] || poi[L]} · ${poi.min} ${t('minShort')}`; el.querySelector('button').setAttribute('aria-label', `${poi[L]}, ${poi.min} ${t('walk')}`); }
+    if (poi) {
+      el.dataset.len = String(poi[L].length);
+      el.querySelector('.poi-name').textContent = poi[L];
+      el.querySelector('.poi-min').textContent = `${poi.min} ${t('walk')}`;
+      el.querySelector('button').setAttribute('aria-label', `${poi[L]}, ${poi.min} ${t('walk')}`);
+    }
     if (tower) { el.querySelector('span').textContent = tower; el.querySelector('button').setAttribute('aria-label', towerName(tower)); }
     if (el.classList.contains('project')) el.querySelector('span').textContent = t('projectName');
   });
@@ -634,10 +648,10 @@ function renderLabels() {
 function makeLabels(S) {
   const root = $('#labels');
   for (const p of POIS) {
-    const el = document.createElement('div'); el.className = `label ${p.cat}`; el.innerHTML = `<button><i>${p.icon}</i><span class="full"></span><span class="short"></span></button>`;
-    el.querySelector('button').addEventListener('click', () => showPlace(p)); root.appendChild(el); labelEls.push({ el, poi: p });
-    const rank = { metro: -1, school: 3, bus: 4 };
-    S.addLabel(el, { x: p.x, y: 6, z: p.z }, rank[p.cat] ?? 12 + POIS.indexOf(p), false);
+    const el = document.createElement('div'); el.className = `label poi ${p.cat}`; el.dataset.len = '12';
+    el.innerHTML = `<button type="button"><i class="poi-ico">${POI_ICON[p.cat] || ''}</i><span class="poi-name"></span><span class="poi-min"></span></button>`;
+    el.querySelector('button').addEventListener('click', () => focusPoi(p)); root.appendChild(el); labelEls.push({ el, poi: p });
+    S.addLabel(el, { x: p.x, y: 6, z: p.z }, 4, false);
   }
   for (const b of state.doc.blocks) {
     const el = document.createElement('div'); el.className = `label tower num ${b.has_data ? 'data' : ''}`; el.innerHTML = '<button><span></span></button>';
@@ -647,6 +661,13 @@ function makeLabels(S) {
   renderLabels();
   syncPoi();
   markTowerBadges();
+}
+function focusPoi(p) {
+  state.hotPoi = p.id;
+  labelEls.forEach(({ el, poi }) => { if (poi) el.classList.toggle('is-hot', poi.id === p.id); });
+  if (renderMode) return;
+  state.scene?.focusPoint(p.x, p.z);
+  state.scene?.request();
 }
 function showPlace(p) {
   state.place = p;
@@ -744,6 +765,7 @@ function hasWebGL() { return !!(window.WebGL2RenderingContext || window.WebGLRen
 const PLACE_ORDER = ['metro', 'school', 'kinder', 'health', 'bus', 'shop', 'bank'];
 const enabledCats = new Set(['metro', 'school', 'bus']);
 let placesOpen = false;
+let placesListOpen = false;
 function placeCats() {
   const present = new Set(POIS.map((p) => p.cat));
   return PLACE_ORDER.filter((c) => present.has(c));
@@ -765,9 +787,15 @@ function paintPlaces() {
     buttons.push(`<button type="button" data-cat="${c}" aria-pressed="${enabledCats.has(c)}">${t('poiCat')[c]}</button>`);
   }
   cats.innerHTML = buttons.join('');
+  const listBtn = $('#places-list-toggle');
+  if (listBtn) {
+    listBtn.textContent = placesListOpen ? t('placesHide') : t('placesList');
+    listBtn.setAttribute('aria-expanded', String(placesListOpen));
+  }
+  list.hidden = !placesListOpen;
   const L = getLang();
   const rows = POIS.filter((p) => enabledCats.has(p.cat));
-  list.innerHTML = rows.map((p) => `<li><span>${esc(p[L])}</span><small>${p.min} ${esc(t('walk'))}</small></li>`).join('');
+  list.innerHTML = rows.map((p) => `<li><button type="button" data-poi="${p.id}"><i class="poi-ico">${POI_ICON[p.cat] || ''}</i><span>${esc(p[L])}</span><small>${p.min} ${esc(t('walk'))}</small></button></li>`).join('');
 }
 function syncPoi() {
   const hideAll = app.classList.contains('hide-labels');
@@ -817,8 +845,21 @@ const blockMenu = mountBlockMenu($('#block-menu-root'), {
 $('#places-btn')?.addEventListener('click', (e) => {
   e.stopPropagation();
   placesOpen = !placesOpen;
+  if (placesOpen && matchMedia('(max-width: 500px), (max-height: 500px) and (max-width: 960px)').matches) placesListOpen = false;
   blockMenu?.close();
   paintPlaces();
+  state.scene?.request();
+});
+$('#places-list-toggle')?.addEventListener('click', () => {
+  placesListOpen = !placesListOpen;
+  paintPlaces();
+  state.scene?.request();
+});
+$('#places-list')?.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-poi]');
+  if (!b) return;
+  const p = POIS.find((x) => x.id === b.dataset.poi);
+  if (p) focusPoi(p);
 });
 $('#places-cats')?.addEventListener('click', (e) => {
   const b = e.target.closest('[data-cat]');

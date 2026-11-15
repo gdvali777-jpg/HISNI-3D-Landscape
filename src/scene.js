@@ -1023,6 +1023,66 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         if (wanted.length >= 4 && shown.length > 0 && shown.length < wanted.length) wanted.forEach((o) => hideLabel(o.it));
       }
     }
+    placePoiMarkers();
+    function placePoiMarkers() {
+      const pois = items.filter((o) => o.it.el.classList.contains('poi-on') && !o.it.el.hidden);
+      const towers = items.filter((o) => o.it.isTower && o.it.el.style.opacity !== '0').map((o) => rectOf(o.it));
+      const placed = [];
+      const hits = (box) => panels.some((p) => overlap(box, p)) || towers.some((p) => overlap(box, p)) || placed.some((p) => overlap(box, p));
+      for (const o of pois) {
+        const it = o.it;
+        if (!o.vis && !it.el.classList.contains('is-hot')) { hideLabel(it); continue; }
+        const hot = it.el.classList.contains('is-hot');
+        const fullW = Math.min(220, 108 + (it.el.dataset.len || 12) * 6);
+        const tries = hot ? [[fullW, false]] : [[fullW, false], [96, true]];
+        let found = null;
+        let compact = false;
+        for (const [lw, isCompact] of tries) {
+          const lh = 44;
+          const steps = [0, 48, -48, 96, -96, 150, -150];
+          const downs = [0, 28, 64, -28];
+          search: for (const dy of downs) {
+            for (const dx of steps) {
+              const cx = Math.min(w - 6 - lw / 2, Math.max(6 + lw / 2, o.sx + dx));
+              const top = Math.min(h - 6 - lh, Math.max(6, o.sy - lh - 10 + dy));
+              const box = { l: cx - lw / 2, t: top, r: cx + lw / 2, b: top + lh };
+              if (box.l < 1 || box.r > w - 1 || box.t < 1 || box.b > h - 1) continue;
+              if (hits(box)) continue;
+              found = box;
+              compact = isCompact;
+              break search;
+            }
+          }
+          if (found) break;
+        }
+        if (!found) {
+          const lw = 96;
+          const lh = 44;
+          const cx = Math.min(w - 6 - lw / 2, Math.max(6 + lw / 2, o.sx + (pois.indexOf(o) % 3 - 1) * 28));
+          const top = Math.min(h - 6 - lh, Math.max(6, o.sy - lh - 10));
+          const box = { l: cx - lw / 2, t: top, r: cx + lw / 2, b: top + lh };
+          const blocked = panels.some((p) => overlap(box, p)) || towers.some((p) => overlap(box, p));
+          if (!blocked && box.l >= 1 && box.r <= w - 1) { found = box; compact = true; }
+        }
+        if (!found && hot) {
+          const lw = Math.min(200, w - 16);
+          const lh = 44;
+          const cx = Math.min(w - 8 - lw / 2, Math.max(8 + lw / 2, o.sx));
+          found = { l: cx - lw / 2, t: 108, r: cx + lw / 2, b: 152 };
+          compact = false;
+        }
+        if (!found) { hideLabel(it); continue; }
+        it.el.classList.toggle('is-compact', compact && !hot);
+        it._lw = found.r - found.l;
+        it._lh = 44;
+        it._lx = (found.l + found.r) / 2;
+        it._lift = 0;
+        it._sy = found.b;
+        reveal(it);
+        commit(it);
+        placed.push(found);
+      }
+    }
   }
 
   // render-on-demand loop
@@ -1187,6 +1247,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
   }
   return {
     renderer, camera, controls, setLight, views, focusTower, focusFloor, highlightTower, buildFloor, clearFloor, recolorApts, addLabel, request,
+    focusPoint(x, z) { flyTo(new THREE.Vector3(x - 70, 60, z + 110), new THREE.Vector3(x, 8, z), 0.85); },
     setLayer(name, on) { if (name === 'labels') return; layerWant[name] = on; applyLayerVis(); shadowsDirty(); request(); },
     setRealView(id) {
       if (id === 'standard') {
