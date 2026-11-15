@@ -729,6 +729,7 @@ function renderFilters() {
   const group = (a) => (a.status === 'available' ? 0 : a.status === 'queue' ? 1 : a.status === 'reserved' ? 2 : a.status === 'sold' ? 3 : 4);
   const priceKey = (a) => (showsPrice(a) ? Number(a.price_usd) : Number.POSITIVE_INFINITY);
   const res = state.doc.apartments.filter((a) => matches(a)).sort((x, y) => group(x) - group(y) || priceKey(x) - priceKey(y) || x.block.localeCompare(y.block) || x.floor - y.floor);
+  const viewCount = state.doc.apartments.filter((a) => a.status === 'available' && (!f.block || a.block === f.block) && (!f.kinds.size || f.kinds.has(a.type.kind))).length;
   const kinds = ['studio', '1br', '2br'], sts = STATUSES;
   el.innerHTML = `<div class="sheet-head"><h2>${t('filters')}</h2><button class="x" data-close aria-label="${t('close')}">×</button></div>
     <form id="ff">
@@ -743,7 +744,7 @@ function renderFilters() {
     <ul class="apt-list results" aria-label="${t('list')}">${res.slice(0, filterLimit).map((a) => `<li><button data-apt="${a.id}"><i class="dot ${a.status}"></i><span><b>№ ${a.number}</b> · ${towerName(a.block)} · ${t('floor')} ${a.floor}<br/><span class="meta">${kindLabel(a.type.kind)} · ${a.area} ${m2()} · ${statusLabel(a.status)}</span></span>${showsPrice(a) ? `<span class="pr">${priceOf(a)}</span>` : ''}</button></li>`).join('') || `<li>${t('noResults')}</li>`}</ul>
     ${res.length > filterLimit ? `<button type="button" class="btn-ghost more" data-more>${t('showMore')} (+${Math.min(40, res.length - filterLimit)})</button>` : ''}
     <p class="note">${t('priceUpdated')} ${snapDate()}</p>
-    <div class="filter-foot"><button class="btn-ghost" data-reset>${t('reset')}</button><button class="primary" data-close>${t('showList')} (${res.length})</button></div>`;
+    <div class="filter-foot"><button class="btn-ghost" data-reset>${t('reset')}</button><button class="primary" data-close>${t('showList')} (${f.block ? viewCount : res.length})</button></div>`;
   el.scrollTop = scroll;
 }
 function readFilters() {
