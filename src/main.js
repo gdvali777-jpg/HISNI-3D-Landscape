@@ -47,6 +47,17 @@ function closeRenderSheet() {
   $('#place-card').hidden = true;
   app.classList.remove('side-sheet');
 }
+function clearRenderSelection() {
+  state.view = 'intro';
+  state.tower = null;
+  state.floor = null;
+  state.apt = null;
+  state.place = null;
+  document.documentElement.dataset.view = 'intro';
+  closeRenderSheet();
+  renderCrumbs();
+  syncHistory();
+}
 let ctxPromise = null;
 const wantsRender = (p) => p.get('view') === 'render' || p.get('mode') === 'render';
 const defaultFilters = () => ({ kinds: new Set(), statuses: new Set(), areaMin: '', areaMax: '', floorMin: '', floorMax: '', priceMin: '', priceMax: '' });
@@ -443,7 +454,7 @@ function selectApt(id, { fromList } = {}) {
 }
 
 function aptActions(a) {
-  if (a.status === 'available') return `<button class="primary accent" data-lead>${t('cta')}</button>${callLink('card')}`;
+  if (a.status === 'available') return `<button class="primary accent" data-lead><span class="cta-full">${t('cta')}</span><span class="cta-short">${t('ctaShort')}</span></button>${callLink('card')}`;
   if (a.status === 'reserved' || a.status === 'queue') return `<button class="btn-ghost" data-similar>${t('similarFree')}</button><button class="primary accent" data-notify>${t('notifyMe')}</button>`;
   return `<button class="primary" data-similar>${t('similarFree')}</button>`;
 }
@@ -794,7 +805,8 @@ const blockMenu = mountBlockMenu($('#block-menu-root'), {
   onSelect(id) {
     if (renderMode) {
       renderApi?.setBlock(id);
-      if (!id || blockOf(id)?.has_data) closeRenderSheet();
+      if (!id) clearRenderSelection();
+      else if (blockOf(id)?.has_data) closeRenderSheet();
       blockMenu?.refresh();
       return;
     }
@@ -849,8 +861,9 @@ function renderHooks() {
     onFloor(id, floor) { setView('floor', { tower: id, floor }); },
     onSoon(id) { setView('block', { tower: id }); },
     onBlock(id) {
+      if (renderMode && !id) clearRenderSelection();
+      else if (renderMode && blockOf(id)?.has_data) closeRenderSheet();
       blockMenu?.refresh();
-      if (renderMode && (!id || blockOf(id)?.has_data)) closeRenderSheet();
     },
   };
 }

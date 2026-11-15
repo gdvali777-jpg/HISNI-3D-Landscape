@@ -950,12 +950,13 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
       const others = items.filter((o) => !o.it.isTower && o.it.el.style.opacity !== '0' && !o.it.el.hidden).map((o) => rectOf(o.it));
       const hitsUi = (box) => panels.some((p) => {
         const small = (p.r - p.l) < 90 && (p.b - p.t) < 90;
-        const extra = small ? 8 : 0;
+        const extra = small ? 14 : 0;
         return overlap(box, { l: p.l - extra, t: p.t - extra, r: p.r + extra, b: p.b + extra });
       });
       const placed = [];
-      const lw = 44;
-      const lh = 44;
+      const short = h < 430;
+      const lw = short ? 36 : 44;
+      const lh = short ? 36 : 44;
       const near = (it) => it._sy > -160 && it._sy < h + 160 && it._sx > -160 && it._sx < w + 160;
       for (const o of group) {
         const it = o.it;
@@ -973,7 +974,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
             if (box.l < 1 || box.t < 1 || box.r > w - 1 || box.b > h - 1) continue;
             if (hitsUi(box)) continue;
             if (placed.some((p) => overlap(box, p))) continue;
-            if (others.some((p) => overlap(box, p))) continue;
+            if (!short && others.some((p) => overlap(box, p))) continue;
             found = box;
             break search;
           }
@@ -986,7 +987,37 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         commit(it);
         placed.push(found);
       }
-      if (overview) {
+      if (short) {
+        for (const o of items) {
+          if (o.it.isTower || o.it.el.style.opacity === '0' || o.it.el.hidden) continue;
+          const b = rectOf(o.it);
+          if (placed.some((p) => overlap(b, p))) hideLabel(o.it);
+        }
+      }
+      if (overview && short) {
+        const shown = group.filter((o) => o.vis && o.it.el.style.opacity !== '0');
+        if (shown.length < 4) {
+          const size = 40;
+          let x = Math.max(w * 0.5, 8);
+          const top = Math.min(h - size - 8, 112);
+          const row = [];
+          for (const o of group) {
+            const it = o.it;
+            const box = { l: x, t: top, r: x + size, b: top + size };
+            if (hitsUi(box) || row.some((p) => overlap(box, p))) { hideLabel(it); x += size + 4; continue; }
+            it._lw = size;
+            it._lh = size;
+            it._lx = x + size / 2;
+            it._lift = 0;
+            it._sy = top + size;
+            reveal(it);
+            commit(it);
+            row.push(box);
+            x += size + 4;
+          }
+          if (row.length > 0 && row.length < 4) group.forEach((o) => hideLabel(o.it));
+        }
+      } else if (overview) {
         const wanted = group.filter((o) => o.vis && near(o.it));
         const shown = wanted.filter((o) => o.it.el.style.opacity !== '0');
         if (wanted.length >= 4 && shown.length > 0 && shown.length < wanted.length) wanted.forEach((o) => hideLabel(o.it));
