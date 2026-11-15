@@ -469,7 +469,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     const ui = panels.slice();
     const header = document.querySelector('.header');
     if (header) {
-      const hb = header.getBoundingClientRect().bottom - cr.top + 8;
+      const hb = header.getBoundingClientRect().bottom - cr.top + 16;
       ui.push({ l: 0, t: 0, r: w, b: hb });
       placed.push([0, 0, w, hb]);
     }
@@ -929,6 +929,8 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
       }
     }
     function portraitTowerGroup() {
+      const places = document.getElementById('places-panel');
+      if (places && !places.hidden) return;
       const portrait = h > w && w < 700;
       const landscapeTowers = w > h && w < 1400 && document.documentElement.dataset.view === 'towers';
       if (!portrait && !landscapeTowers) return;
@@ -1041,17 +1043,18 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         const cy = (b.t + b.b) / 2;
         return { l: cx - 26, t: cy - 26, r: cx + 26, b: cy + 26 };
       });
-      const obstacles = panels.map((p) => grow(p, 4));
+      const obstacles = panels.map((p) => grow(p, (p.r - p.l) > w * 0.55 && p.t < 90 ? 12 : 8));
       const placed = [];
       const hits = (box) => obstacles.some((p) => touches(box, p)) || towers.some((p) => touches(box, p)) || placed.some((p) => touches(box, grow(p, 4)));
       const seek = (o, lw) => {
         const lh = 44;
+        const minTop = obstacles.reduce((m, p) => ((p.r - p.l) > w * 0.55 && p.t < 40 ? Math.max(m, p.b + 2) : m), 8);
         const steps = [0, lw + 10, -(lw + 10), (lw + 10) * 2, -((lw + 10) * 2)];
         const downs = [0, 50, -50, 100, 150];
         for (const dy of downs) {
           for (const dx of steps) {
             const cx = Math.min(w - 8 - lw / 2, Math.max(8 + lw / 2, o.sx + dx));
-            const top = Math.min(h - 8 - lh, Math.max(8, o.sy - lh - 8 + dy));
+            const top = Math.min(h - 8 - lh, Math.max(minTop, o.sy - lh - 8 + dy));
             const box = { l: cx - lw / 2, t: top, r: cx + lw / 2, b: top + lh };
             if (box.l < 2 || box.r > w - 2 || box.t < 2 || box.b > h - 2) continue;
             // The 14px stem hangs below the pill and was landing on tower badges.
@@ -1090,13 +1093,15 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     function placeTourPins() {
       const tours = items.filter((o) => o.it.el.classList.contains('tour-pin') && !o.it.el.hidden);
       if (!tours.length) return;
+      const overview = (document.documentElement.dataset.view || 'intro') === 'intro';
+      if (!overview) { tours.forEach((o) => hideLabel(o.it)); return; }
       const blocks = [];
-      const add = (b) => { if (b && b.r > b.l + 2 && b.b > b.t + 2) blocks.push(b); };
-      for (const p of panels) add(p);
+      const add = (b, pad = 8) => { if (b && b.r > b.l + 2 && b.b > b.t + 2) blocks.push({ l: b.l - pad, t: b.t - pad, r: b.r + pad, b: b.b + pad }); };
+      for (const p of panels) add(p, 6);
       for (const o of items) {
         if (o.it.el.classList.contains('tour-pin')) continue;
         if (o.it.el.style.opacity === '0' || o.it.el.hidden) continue;
-        add(rectOf(o.it));
+        add(rectOf(o.it), 8);
       }
       const hits = (box) => box.l < 4 || box.t < 4 || box.r > w - 4 || box.b > h - 4 || blocks.some((p) => overlap(box, p));
       const seek = (o, lw, lh, wide) => {
@@ -1114,20 +1119,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         }
         return null;
       };
-      for (const o of tours) {
-        const it = o.it;
-        if (!it.leader) {
-          it.leader = document.createElement('i');
-          it.leader.className = 'leader';
-          it.el.parentNode?.appendChild(it.leader);
-        }
-        if (!o.vis) { hideLabel(it); it.el.classList.remove('is-compact'); it.el.style.width = ''; continue; }
-        const chars = it.el.querySelector('.tour-name')?.textContent.length || 12;
-        const fullW = Math.min(w > 800 ? 220 : 176, Math.max(128, chars * (document.documentElement.lang === 'ka' ? 8.6 : 7) + 40));
-        let found = seek(o, fullW, 44, false);
-        let compact = false;
-        if (!found) { found = seek(o, 44, 44, true); compact = true; }
-        if (!found) { hideLabel(it); it.el.classList.remove('is-compact'); it.el.style.width = ''; continue; }
+      const placeFound = (it, o, found, compact) => {
         it.el.classList.toggle('is-compact', compact);
         it.el.style.width = `${Math.round(found.r - found.l)}px`;
         it._lw = found.r - found.l;
@@ -1138,7 +1130,45 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         it._sy = found.b;
         reveal(it);
         commit(it);
-        blocks.push(found);
+        blocks.push({ l: found.l - 8, t: found.t - 8, r: found.r + 8, b: found.b + 8 });
+      };
+      tours.forEach((o, i) => {
+        const it = o.it;
+        if (!it.leader) {
+          it.leader = document.createElement('i');
+          it.leader.className = 'leader';
+          it.el.parentNode?.appendChild(it.leader);
+        }
+        const off = !o.vis || o.sx < 8 || o.sx > w - 8 || o.sy < 8 || o.sy > h - 8;
+        if (off) {
+          o.sx = Math.min(w - 36, Math.max(120, w * 0.46) + i * 6);
+          o.sy = Math.min(h - 36, Math.max(96, h * 0.38));
+        }
+        const chars = it.el.querySelector('.tour-name')?.textContent.length || 12;
+        const fullW = Math.min(w > 800 ? 220 : 176, Math.max(128, chars * (document.documentElement.lang === 'ka' ? 8.6 : 7) + 40));
+        let found = off ? null : seek(o, fullW, 44, false);
+        let compact = false;
+        if (!found) { found = seek(o, 44, 44, true); compact = true; }
+        if (!found) { hideLabel(it); it.el.classList.remove('is-compact'); it.el.style.width = ''; return; }
+        placeFound(it, o, found, compact);
+      });
+      const missed = tours.filter((o) => o.it.el.style.opacity === '0');
+      if (missed.length) {
+        const cells = [];
+        for (let y = 8; y <= h - 52; y += 22) {
+          for (let x = 8; x <= w - 52; x += 22) {
+            const trial = { l: x, t: y, r: x + 44, b: y + 44 };
+            if (!hits(trial)) cells.push(trial);
+          }
+        }
+        for (const o of missed) {
+          const box = cells.find((c) => !hits(c));
+          if (!box) break;
+          o.sx = (box.l + box.r) / 2;
+          placeFound(o.it, o, box, true);
+          const i = cells.indexOf(box);
+          cells.splice(0, i + 1);
+        }
       }
     }
   }
