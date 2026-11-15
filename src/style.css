@@ -133,6 +133,7 @@ button { cursor: pointer; }
 .facts div { border-top: 1px solid var(--line); padding-top: 6px; } .facts small { display: block; font-size: 12px; color: var(--muted); } .facts b { font-size: 16px; font-weight: 500; }
 .status-pill { display: inline-flex; align-items: center; gap: 6px; }
 .cta-row { display: flex; flex-wrap: wrap; gap: 8px; position: sticky; bottom: 0; z-index: 3; background: rgba(248,246,238,.98); padding: 8px 0 2px; } .cta-row .primary { flex: 1 1 auto; min-width: 0; white-space: normal; }
+.cta-short { display: none; }
 .apt-card .cta-row .call-btn { flex: 1 1 auto; min-width: 0; white-space: normal; text-align: center; }
 .filters h2 { margin: 0; font-size: 22px; }
 .filters fieldset { border: 0; padding: 0; margin: 12px 0; } .filters legend { font-size: 12px; color: var(--small); margin-bottom: 6px; padding: 0; }
@@ -177,6 +178,7 @@ footer { position: absolute; right: 64px; bottom: 6px; font-size: 12px; color: v
 .night .label:not(.tower)::before { background: var(--cream); }
 .label.tower button { background: var(--navy); color: var(--cream); padding: 0 14px; min-height: 44px; font-weight: 700; font-size: 14px; }
 .label.tower.num button { width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 0; border-radius: 50%; justify-content: center; }
+@media (max-height: 430px) { .label.tower.num button { width: 40px; height: 40px; min-width: 40px; min-height: 40px; font-size: 13px; } }
 .label.tower.num.is-on button { box-shadow: 0 0 0 3px #E78E75; }
 .label.tower.data button { background: var(--primary); color: var(--navy); }
 .label.project button { background: var(--secondary); color: var(--navy); font-weight: 700; padding: 0 12px; }
@@ -397,7 +399,9 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
   .intro .intro-actions .primary { margin-top: 0; position: static; width: auto; }
   .intro.is-collapsed .primary { width: auto; margin-top: 0; }
   .intro.is-collapsed .call-btn { min-height: 44px; }
-  .block-picker { left: auto; right: calc(8px + env(safe-area-inset-right)); top: calc(max(6px, env(safe-area-inset-top)) + 50px); }
+  .block-picker { left: auto; right: calc(64px + env(safe-area-inset-right)); top: calc(max(6px, env(safe-area-inset-top)) + 50px); }
+  #app.is-render .day-night { left: calc(8px + env(safe-area-inset-left)); right: auto; top: calc(max(6px, env(safe-area-inset-top)) + 50px); bottom: auto; flex-direction: row; border-radius: 999px; }
+  .map-meta { top: auto; bottom: 8px; right: calc(64px + env(safe-area-inset-right)); }
   .render-block-menu, .places-panel { left: auto; right: 0; max-height: calc(100dvh - 120px - env(safe-area-inset-top)); }
   .crumbs { top: calc(max(6px, env(safe-area-inset-top)) + 52px); left: calc(8px + env(safe-area-inset-left)); right: calc(220px + env(safe-area-inset-right)); max-width: none; flex-wrap: nowrap; z-index: 6; }
   .intro { max-height: calc(100dvh - 176px); }
@@ -419,6 +423,18 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
   .layers .light button { padding: 0 6px; }
   footer { left: calc(8px + env(safe-area-inset-left)); right: auto; bottom: calc(4px + env(safe-area-inset-bottom)); z-index: 2; max-width: calc(36vw); font-size: 8px; white-space: nowrap; overflow: hidden; background: rgba(248,246,238,.92); padding: 0 6px; border-radius: 8px; }
   .layers { left: calc(36vw + 10px); }
+}
+@media (max-height: 380px) {
+  #app:has(#apt-card:not([hidden])) #block-picker,
+  #app:has(#apt-card:not([hidden])) #crumbs { visibility: hidden; pointer-events: none; }
+  .apt-card.sheet { top: 8px; max-height: calc(100dvh - 56px); }
+  .apt-card .plan { max-height: 64px; }
+  .apt-card .cta-full { display: none; }
+  .apt-card .cta-short { display: inline; }
+  .apt-card .cta-row { flex-wrap: nowrap; }
+  .apt-card .cta-row .primary, .apt-card .cta-row .call-btn { flex: 1 1 0; min-width: 0; height: 44px; white-space: nowrap; font-size: 13px; padding: 0 8px; }
+  #app:has(#explorer:not([hidden])) .crumbs { display: none; }
+  #app:has(#explorer:not([hidden])) .explorer { top: calc(48px + env(safe-area-inset-top)); }
 }
 @media (max-height: 420px) {
   .apt-card.sheet { padding: 4px 10px 6px; }
