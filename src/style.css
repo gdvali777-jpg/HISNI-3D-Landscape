@@ -64,6 +64,9 @@ button { cursor: pointer; }
 .stat-src a { display: inline-flex; align-items: center; min-height: 44px; }
 .stats small { font-size: 12px; color: var(--small); line-height: 1.2; display: block; }
 .intro-avail { margin: 0 0 8px; font-size: 15px; font-weight: 500; min-height: 2.8em; }
+html[lang="en"] .intro-avail { min-height: 4.4em; }
+html[lang="en"] .intro-copy { min-height: 4.2em; }
+html[lang="en"] .stats small { min-height: 2.6em; }
 .intro .primary { width: 100%; }
 .intro-actions .primary { width: auto; flex: 1; min-width: 0; }
 .crumbs { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 54px); left: 12px; right: 12px; display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; z-index: 5; }
@@ -184,7 +187,10 @@ footer { position: absolute; right: 64px; bottom: 6px; font-size: 12px; color: v
 .night .label:not(.tower)::before { background: var(--cream); }
 .label.tower button { background: var(--navy); color: var(--cream); padding: 0 14px; min-height: 44px; font-weight: 700; font-size: 14px; }
 .label.tower.num button { width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 0; border-radius: 50%; justify-content: center; }
-@media (max-height: 430px) { .label.tower.num button { width: 40px; height: 40px; min-width: 40px; min-height: 40px; font-size: 13px; } }
+@media (max-height: 430px) {
+  .label.tower.num button { width: 40px; height: 40px; min-width: 40px; min-height: 40px; font-size: 13px; position: relative; }
+  .label.tower.num button::after { content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
+}
 .label.tower.num.is-on button { box-shadow: 0 0 0 3px #E78E75; }
 .label.tower.data button { background: var(--primary); color: var(--navy); }
 .label.project button { background: var(--secondary); color: var(--navy); font-weight: 700; padding: 0 12px; }
@@ -458,17 +464,28 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
   .crumbs { top: calc(max(6px, env(safe-area-inset-top)) + 52px); left: calc(8px + env(safe-area-inset-left)); right: calc(220px + env(safe-area-inset-right)); max-width: none; flex-wrap: nowrap; z-index: 6; }
   .intro { max-height: calc(100dvh - 176px); }
   .explorer { left: calc(8px + env(safe-area-inset-left)); right: auto; top: calc(108px + env(safe-area-inset-top)); bottom: calc(52px + env(safe-area-inset-bottom)); width: min(280px, 46vw); max-height: none; }
-  .explorer h2 { font-size: 16px; margin: 0 0 2px; }
+  .explorer-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 2; height: 36px; padding: 0 4px; pointer-events: none; background: linear-gradient(rgba(248,246,238,.96), rgba(248,246,238,0)); }
+  .explorer-bar .drag-handle, .explorer-bar .x { pointer-events: auto; }
+  .explorer-bar .drag-handle { flex: none; width: 72px; margin: 0 auto; align-items: flex-start; padding-top: 4px; }
+  .explorer-bar .x { position: absolute; top: 2px; right: 4px; }
+  #app:has(#apt-card:not([hidden])) #crumbs { visibility: hidden; pointer-events: none; }
   .explorer-body > p:not(.note) { display: none; }
-  .explorer-body { padding-top: 0; }
-  .explorer .legend { margin: 2px 0 6px; }
+  .explorer-body { flex: 1 1 auto; padding: 22px 12px 4px; }
+  .explorer h2 { font-size: 14px; line-height: 1.15; margin: 0 0 2px; }
+  .explorer .legend { margin: 0 0 4px; }
+  .explorer .note { margin-top: 4px; }
   .sheet { left: calc(min(280px, 46vw) + 16px); right: calc(56px + env(safe-area-inset-right)); top: calc(48px + env(safe-area-inset-top)); bottom: calc(76px + env(safe-area-inset-bottom)); width: auto; max-height: none; }
   .apt-card.sheet { display: flex; flex-direction: column; overflow: hidden; max-height: calc(100dvh - 124px); padding-bottom: 8px; }
   .apt-card .sheet-head { flex: none; }
   .apt-card .apt-body { overflow: auto; flex: 1 1 auto; min-height: 0; max-height: calc(100dvh - 220px); }
   .apt-card .plan { max-height: 16dvh; margin: 6px 0; }
-  .apt-card .cta-row { flex: none; flex-wrap: wrap; gap: 6px; padding: 6px 0 0; }
-  .apt-card .cta-row .primary, .apt-card .cta-row .call-btn { flex: 1 1 140px; min-width: 120px; min-height: 44px; height: auto; padding: 6px 8px; font-size: 12px; line-height: 1.15; white-space: normal; text-align: center; }
+  .apt-card.sheet { top: calc(56px + env(safe-area-inset-top)); }
+  #app.is-render:has(#explorer:not([hidden])) .explorer { top: calc(112px + env(safe-area-inset-top)); }
+  #app.is-render:has(#explorer:not([hidden])) .day-night { left: auto; right: calc(8px + env(safe-area-inset-right)); top: calc(112px + env(safe-area-inset-top)); bottom: auto; }
+  .apt-card .cta-full { display: none; }
+  .apt-card .cta-short { display: inline; }
+  .apt-card .cta-row { flex: none; flex-wrap: nowrap; gap: 6px; padding: 6px 0 0; }
+  .apt-card .cta-row > button, .apt-card .cta-row .call-btn { flex: 1 1 0; min-width: 0; min-height: 44px; height: auto; padding: 6px 8px; font-size: 13px; line-height: 1.15; white-space: normal; text-align: center; }
   .hint { top: auto; bottom: calc(60px + env(safe-area-inset-bottom)); right: calc(60px + env(safe-area-inset-right)); max-width: min(220px, 42vw); }
   .layers { left: 40vw; right: calc(56px + env(safe-area-inset-right)); bottom: calc(4px + env(safe-area-inset-bottom)); max-width: none; width: auto; flex-direction: row; align-items: center; overflow: hidden; }
   .layers .light { flex: 1; min-width: 0; }
@@ -479,14 +496,8 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
 @media (max-height: 380px) {
   #app:has(#apt-card:not([hidden])) #block-picker,
   #app:has(#apt-card:not([hidden])) #crumbs { visibility: hidden; pointer-events: none; }
-  .apt-card.sheet { top: 8px; max-height: calc(100dvh - 56px); }
+  .apt-card.sheet { top: calc(56px + env(safe-area-inset-top)); max-height: calc(100dvh - 64px - env(safe-area-inset-top)); }
   .apt-card .plan { max-height: 64px; }
-  .apt-card .cta-full { display: none; }
-  .apt-card .cta-short { display: inline; }
-  .apt-card .cta-row { flex-wrap: nowrap; }
-  .apt-card .cta-row .primary, .apt-card .cta-row .call-btn { flex: 1 1 0; min-width: 0; height: 44px; white-space: nowrap; font-size: 13px; padding: 0 8px; }
-  #app:has(#explorer:not([hidden])) .crumbs { display: none; }
-  #app:has(#explorer:not([hidden])) .explorer { top: calc(48px + env(safe-area-inset-top)); }
 }
 @media (max-height: 420px) {
   .apt-card.sheet { padding: 4px 10px 6px; }

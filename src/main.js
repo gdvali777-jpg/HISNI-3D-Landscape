@@ -28,14 +28,14 @@ const POI_ICON = {
   bank: '<svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="13" fill="#8A9B48"/><path fill="#fff" d="M14 7 7 11v1.4h14V11L14 7zm-5.2 4.2V18H11v-6.8H8.8zm4.1 0V18h2.2v-6.8h-2.2zm4.2 0V18H19v-6.8h-2zm-9 7.2h12.2V20H8.1v-1.6z"/></svg>',
 };
 const POIS = [
-  { id: 'metro', cat: 'metro', icon: 'M', x: 151, z: -82, ka: 'მეტროსადგური „ისანი“', en: 'Isani metro station', ska: 'მეტრო', sen: 'Metro', min: 2, src: 'client' },
-  { id: 'school', cat: 'school', icon: '87', x: -120, z: -140, ka: 'ვაჟა-ფშაველას სახ. №87 საჯარო სკოლა', en: 'Public School No. 87 (Vazha-Pshavela)', ska: 'სკოლა', sen: 'School', min: 2, src: 'client' },
-  { id: 'bus', cat: 'bus', icon: 'B', x: 154, z: -66, ka: 'ავტობუსის გაჩერება „მ/ს ისანი“', en: 'Bus stop “M/S Isani”', ska: 'ავტობუსი', sen: 'Bus stop', m: 167 },
-  { id: 'evex', cat: 'health', icon: '+', x: -172, z: -13, ka: 'პოლიკლინიკა „ევექსი“', en: 'Evex Polyclinic', m: 173 },
-  { id: 'aversi', cat: 'health', icon: '+', x: 164, z: 134, ka: 'ავერსის კლინიკა', en: 'Aversi Clinic', m: 212 },
-  { id: 'bog', cat: 'bank', icon: '₾', x: 245, z: -76, ka: 'საქართველოს ბანკი', en: 'Bank of Georgia', m: 256 },
-  { id: 'carrefour', cat: 'shop', icon: 'S', x: 249, z: 330, ka: 'კარფური მარკეტი', en: 'Carrefour Market', m: 413 },
-  { id: 'kinder', cat: 'kinder', icon: 'K', x: 323, z: 618, ka: 'ბაგა-ბაღი №30', en: 'Kindergarten No. 30', m: 698 },
+  { id: 'metro', cat: 'metro', icon: 'M', x: 151, z: -82, ka: 'მეტროსადგური „ისანი“', en: 'Isani metro station', short: { ka: 'მეტრო ისანი', en: 'Isani metro' }, ska: 'მეტრო', sen: 'Metro', min: 2, src: 'client' },
+  { id: 'school', cat: 'school', icon: '87', x: -120, z: -140, ka: 'ვაჟა-ფშაველას სახ. №87 საჯარო სკოლა', en: 'Public School No. 87 (Vazha-Pshavela)', short: { ka: 'სკოლა №87', en: 'School No. 87' }, ska: 'სკოლა', sen: 'School', min: 2, src: 'client' },
+  { id: 'bus', cat: 'bus', icon: 'B', x: 154, z: -66, ka: 'ავტობუსის გაჩერება „მ/ს ისანი“', en: 'Bus stop “M/S Isani”', short: { ka: 'გაჩერება ისანი', en: 'Isani bus stop' }, ska: 'ავტობუსი', sen: 'Bus stop', m: 167 },
+  { id: 'evex', cat: 'health', icon: '+', x: -172, z: -13, ka: 'პოლიკლინიკა „ევექსი“', en: 'Evex Polyclinic', short: { ka: 'ევექსი', en: 'Evex' }, m: 173 },
+  { id: 'aversi', cat: 'health', icon: '+', x: 164, z: 134, ka: 'ავერსის კლინიკა', en: 'Aversi Clinic', short: { ka: 'ავერსი', en: 'Aversi' }, m: 212 },
+  { id: 'bog', cat: 'bank', icon: '₾', x: 245, z: -76, ka: 'საქართველოს ბანკი', en: 'Bank of Georgia', short: { ka: 'საქ. ბანკი', en: 'Bank of Georgia' }, m: 256 },
+  { id: 'carrefour', cat: 'shop', icon: 'S', x: 249, z: 330, ka: 'კარფური მარკეტი', en: 'Carrefour Market', short: { ka: 'კარფური', en: 'Carrefour' }, m: 413 },
+  { id: 'kinder', cat: 'kinder', icon: 'K', x: 323, z: 618, ka: 'ბაგა-ბაღი №30', en: 'Kindergarten No. 30', short: { ka: 'ბაღი №30', en: 'Kinder. No. 30' }, m: 698 },
 ];
 POIS.forEach((p) => { if (p.min == null) p.min = Math.max(1, Math.round((p.m * 1.3) / 80)); });
 
@@ -464,7 +464,7 @@ function selectApt(id, { fromList } = {}) {
 
 function aptActions(a) {
   if (a.status === 'available') return `<button class="primary accent" data-lead><span class="cta-full">${t('cta')}</span><span class="cta-short">${t('ctaShort')}</span></button>${callLink('card')}`;
-  if (a.status === 'reserved' || a.status === 'queue') return `<button class="btn-ghost" data-similar>${t('similarFree')}</button><button class="primary accent" data-notify>${t('notifyMe')}</button>`;
+  if (a.status === 'reserved' || a.status === 'queue') return `<button class="btn-ghost" data-similar><span class="cta-full">${t('similarFree')}</span><span class="cta-short">${t('similarShort')}</span></button><button class="primary accent" data-notify><span class="cta-full">${t('notifyMe')}</span><span class="cta-short">${t('notifyShort')}</span></button>`;
   return `<button class="primary" data-similar>${t('similarFree')}</button>`;
 }
 function renderCard() {
@@ -636,8 +636,9 @@ function renderLabels() {
   const L = getLang();
   labelEls.forEach(({ el, poi, tower }) => {
     if (poi) {
-      el.dataset.len = String(poi[L].length);
-      el.querySelector('.poi-name').textContent = poi[L];
+      const shown = poi.short?.[L] || poi[L];
+      el.dataset.len = String(shown.length);
+      el.querySelector('.poi-name').textContent = shown;
       el.querySelector('.poi-min').textContent = `${poi.min} ${t('walk')}`;
       el.querySelector('button').setAttribute('aria-label', `${poi[L]}, ${poi.min} ${t('walk')}`);
     }
@@ -846,16 +847,27 @@ const blockMenu = mountBlockMenu($('#block-menu-root'), {
     else setView('block', { tower: id });
   },
 });
+function restoreIntroAfterPlaces() {
+  if (introHold == null) return;
+  applyIntroCollapsed(introHold, false);
+  introHold = null;
+}
+function closePlaces() {
+  if (!placesOpen) return;
+  placesOpen = false;
+  placesListOpen = false;
+  restoreIntroAfterPlaces();
+  paintPlaces();
+  state.scene?.request();
+}
 $('#places-btn')?.addEventListener('click', (e) => {
   e.stopPropagation();
-  placesOpen = !placesOpen;
-  if (placesOpen && placesPhone()) {
+  if (placesOpen) { closePlaces(); return; }
+  placesOpen = true;
+  if (placesPhone()) {
     if (introHold == null) introHold = $('#intro').classList.contains('is-collapsed');
     placesListOpen = false;
     applyIntroCollapsed(true, false);
-  } else if (!placesOpen && introHold != null) {
-    applyIntroCollapsed(introHold, false);
-    introHold = null;
   }
   blockMenu?.close();
   paintPlaces();
@@ -895,8 +907,7 @@ $('#places-cats')?.addEventListener('click', (e) => {
 });
 document.addEventListener('pointerdown', (e) => {
   if (!placesOpen || e.target.closest('.places-wrap')) return;
-  placesOpen = false;
-  paintPlaces();
+  closePlaces();
 });
 function renderHooks() {
   return {
