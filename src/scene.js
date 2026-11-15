@@ -1002,7 +1002,8 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
           if (placed.some((p) => overlap(b, p))) hideLabel(o.it);
         }
       }
-      if (overview && short) {
+      const placesOpen = !!(document.getElementById('places-panel') && !document.getElementById('places-panel').hidden);
+      if (overview && short && !placesOpen) {
         const shown = group.filter((o) => o.vis && o.it.el.style.opacity !== '0');
         if (shown.length < 4) {
           const size = 44;
@@ -1025,7 +1026,32 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
           }
           if (row.length > 0 && row.length < 4) group.forEach((o) => hideLabel(o.it));
         }
-      } else if (overview) {
+      } else if (overview && short && placesOpen) {
+        const size = 44;
+        const row = [];
+        for (const o of group) {
+          if (!o.vis) continue;
+          let box = null;
+          for (let y = 56; y <= h - size - 8 && !box; y += 10) {
+            for (let x = 8; x <= w - size - 8 && !box; x += 8) {
+              const trial = { l: x, t: y, r: x + size, b: y + size };
+              if (hitsUi(trial)) continue;
+              if (row.some((p) => overlap(trial, { l: p.l - 8, t: p.t - 8, r: p.r + 8, b: p.b + 8 }))) continue;
+              box = trial;
+            }
+          }
+          if (!box) continue;
+          const it = o.it;
+          it._lw = size;
+          it._lh = size;
+          it._lx = (box.l + box.r) / 2;
+          it._lift = 0;
+          it._sy = box.b;
+          reveal(it);
+          commit(it);
+          row.push(box);
+        }
+      } else if (overview && !placesOpen) {
         const wanted = group.filter((o) => o.vis && near(o.it));
         const shown = wanted.filter((o) => o.it.el.style.opacity !== '0');
         if (wanted.length >= 4 && shown.length > 0 && shown.length < wanted.length) wanted.forEach((o) => hideLabel(o.it));
@@ -1041,7 +1067,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         const b = rectOf(o.it);
         const cx = (b.l + b.r) / 2;
         const cy = (b.t + b.b) / 2;
-        return { l: cx - 26, t: cy - 26, r: cx + 26, b: cy + 26 };
+        return { l: cx - 34, t: cy - 34, r: cx + 34, b: cy + 34 };
       });
       const obstacles = panels.map((p) => grow(p, (p.r - p.l) > w * 0.55 && p.t < 90 ? 12 : 8));
       const placed = [];
@@ -1074,6 +1100,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         let found = seek(o, fullW);
         let compact = false;
         if (!found) { found = seek(o, 108); compact = true; }
+        if (!found) { found = seek(o, 92); compact = true; }
         if (!found) { hideLabel(it); it.el.style.width = ''; continue; }
         it.el.classList.toggle('is-compact', compact);
         it.el.style.width = `${Math.round(found.r - found.l)}px`;
@@ -1087,7 +1114,36 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         commit(it);
         const shifted = Math.abs(it._lx - it._sx) > 1;
         const visual = shifted ? { l: found.l, t: found.t - 14, r: found.r, b: found.b - 14 } : found;
-        placed.push({ l: visual.l - 2, t: visual.t - 2, r: visual.r + 2, b: visual.b + (shifted ? 2 : 16) });
+        placed.push({ l: visual.l - 10, t: visual.t - 10, r: visual.r + 10, b: visual.b + (shifted ? 10 : 22) });
+      }
+      for (const o of ordered) {
+        const it = o.it;
+        const el = it.el;
+        if (el.style.opacity !== '0') continue;
+        if (!o.vis && !el.classList.contains('is-hot')) continue;
+        let box = null;
+        let best = 1e9;
+        const lw = 100;
+        for (let y = 8; y <= h - 56; y += 12) {
+          for (let x = 8; x <= w - lw - 8; x += 12) {
+            const trial = { l: x, t: y, r: x + lw, b: y + 44 };
+            if (hits({ l: trial.l, t: trial.t, r: trial.r, b: trial.b + 12 })) continue;
+            const d = Math.hypot((x + lw / 2) - o.sx, (y + 22) - o.sy);
+            if (d < best) { best = d; box = trial; }
+          }
+        }
+        if (!box) continue;
+        el.classList.add('is-compact');
+        el.style.width = `${lw}px`;
+        it._lw = lw;
+        it._lh = 44;
+        it._lx = (box.l + box.r) / 2;
+        it._lift = 0;
+        it._sx = o.sx;
+        it._sy = box.b;
+        reveal(it);
+        commit(it);
+        placed.push({ l: box.l - 10, t: box.t - 10, r: box.r + 10, b: box.b + 18 });
       }
     }
     function placeTourPins() {
@@ -1097,13 +1153,24 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
       if (!overview) { tours.forEach((o) => hideLabel(o.it)); return; }
       const blocks = [];
       const add = (b, pad = 8) => { if (b && b.r > b.l + 2 && b.b > b.t + 2) blocks.push({ l: b.l - pad, t: b.t - pad, r: b.r + pad, b: b.b + pad }); };
-      for (const p of panels) add(p, 6);
+      for (const p of panels) add(p, 8);
       for (const o of items) {
         if (o.it.el.classList.contains('tour-pin')) continue;
         if (o.it.el.style.opacity === '0' || o.it.el.hidden) continue;
-        add(rectOf(o.it), 8);
+        add(rectOf(o.it), 18);
+      }
+      const raw = [];
+      for (const p of panels) raw.push({ l: p.l, t: p.t, r: p.r, b: p.b });
+      for (const o of items) {
+        if (o.it.el.classList.contains('tour-pin')) continue;
+        if (o.it.el.style.opacity === '0' || o.it.el.hidden) continue;
+        raw.push(rectOf(o.it));
       }
       const hits = (box) => box.l < 4 || box.t < 4 || box.r > w - 4 || box.b > h - 4 || blocks.some((p) => overlap(box, p));
+      const clearOfFixed = (box) => {
+        const pad = { l: box.l - 12, t: box.t - 12, r: box.r + 12, b: box.b + 12 };
+        return pad.l >= 2 && pad.t >= 2 && pad.r <= w - 2 && pad.b <= h - 2 && !raw.some((p) => overlap(pad, p));
+      };
       const seek = (o, lw, lh, wide) => {
         const step = lw + 8;
         const steps = wide ? [0, step, -step, step * 2, -step * 2, step * 3, -step * 3] : [0, step, -step];
@@ -1130,7 +1197,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         it._sy = found.b;
         reveal(it);
         commit(it);
-        blocks.push({ l: found.l - 8, t: found.t - 8, r: found.r + 8, b: found.b + 8 });
+        blocks.push({ l: found.l - 12, t: found.t - 12, r: found.r + 12, b: found.b + 16 });
       };
       tours.forEach((o, i) => {
         const it = o.it;
@@ -1152,22 +1219,24 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         if (!found) { hideLabel(it); it.el.classList.remove('is-compact'); it.el.style.width = ''; return; }
         placeFound(it, o, found, compact);
       });
-      const missed = tours.filter((o) => o.it.el.style.opacity === '0');
-      if (missed.length) {
-        const cells = [];
-        for (let y = 8; y <= h - 52; y += 22) {
-          for (let x = 8; x <= w - 52; x += 22) {
-            const trial = { l: x, t: y, r: x + 44, b: y + 44 };
-            if (!hits(trial)) cells.push(trial);
+      if (tours.some((o) => o.it.el.style.opacity === '0')) {
+        const size = 44;
+        const spots = [];
+        for (let y = 8; y <= h - size - 8 && spots.length < tours.length; y += 6) {
+          for (let x = 8; x <= w - size - 8 && spots.length < tours.length; x += 6) {
+            const trial = { l: x, t: y, r: x + size, b: y + size };
+            if (!clearOfFixed(trial)) continue;
+            const padded = { l: trial.l - 12, t: trial.t - 12, r: trial.r + 12, b: trial.b + 12 };
+            if (spots.some((p) => overlap(padded, p))) continue;
+            spots.push(trial);
+            x += size;
           }
         }
-        for (const o of missed) {
-          const box = cells.find((c) => !hits(c));
-          if (!box) break;
-          o.sx = (box.l + box.r) / 2;
-          placeFound(o.it, o, box, true);
-          const i = cells.indexOf(box);
-          cells.splice(0, i + 1);
+        if (spots.length === tours.length) {
+          tours.forEach((o, i) => {
+            o.sx = (spots[i].l + spots[i].r) / 2;
+            placeFound(o.it, o, spots[i], true);
+          });
         }
       }
     }
