@@ -450,7 +450,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     });
     return out;
   }
-  const LABEL_AVOID = '#intro, #explorer, .sheet, .layers, .tools, .place-card, .crumbs, .header, .map-meta, footer, #hint, #toast, #bg-switch';
+  const LABEL_AVOID = '#intro, #explorer, .sheet, .layers, .tools, .place-card, .crumbs, .header, .map-meta, footer, #hint, #toast, #bg-switch, #block-picker, .day-night, #view-toggle';
   const hit = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
   function updateLabels(precise) {
     const w = container.clientWidth, h = container.clientHeight;
@@ -812,6 +812,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     function rankOf(it) {
       if (it.el.classList.contains('metro')) return 0;
       if (it.isTower) return 1;
+      if (it.el.classList.contains('poi-on')) return 2;
       if (it.el.classList.contains('school')) return 2;
       if (it.el.classList.contains('bus')) return 3;
       return 9;
@@ -938,6 +939,46 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         }
       }
       if (partial) group.forEach((o) => hideLabel(o.it));
+    }
+    placeTowerBadges();
+    function placeTowerBadges() {
+      const group = items.filter((o) => o.it.isTower && o.it.el.classList.contains('num'));
+      if (!group.length) return;
+      const placed = [];
+      const lw = 44;
+      const lh = 44;
+      for (const o of group) {
+        const it = o.it;
+        it._lw = lw;
+        it._lh = lh;
+        const onScreen = o.vis && it._sx > -30 && it._sx < w + 30 && it._sy > -30 && it._sy < h + 30;
+        if (!onScreen) { hideLabel(it); continue; }
+        let found = null;
+        const steps = [0, 28, -28, 56, -56, 88, -88, 120, -120];
+        const downs = [0, 16, 40, 72, 110, 150];
+        search: for (const dy of downs) {
+          for (const dx of steps) {
+            const cx = Math.min(w - 8 - lw / 2, Math.max(8 + lw / 2, it._sx + dx));
+            const top = Math.min(h - 8 - lh, Math.max(8, it._sy - lh - 6 + dy));
+            const box = { l: cx - lw / 2, t: top, r: cx + lw / 2, b: top + lh };
+            if (box.l < 2 || box.t < 2 || box.r > w - 2 || box.b > h - 2) continue;
+            if (panels.some((p) => overlap(box, p))) continue;
+            if (placed.some((p) => overlap(box, p))) continue;
+            found = { cx, top };
+            break search;
+          }
+        }
+        if (!found) { hideLabel(it); continue; }
+        it._lx = found.cx;
+        it._lift = 0;
+        it._sy = found.top + lh;
+        reveal(it);
+        commit(it);
+        placed.push({ l: found.cx - lw / 2, t: found.top, r: found.cx + lw / 2, b: found.top + lh });
+      }
+      const onScreen = group.filter((o) => o.vis && o.it._sx > -30 && o.it._sx < w + 30 && o.it._sy > -30 && o.it._sy < h + 30);
+      const visible = onScreen.filter((o) => o.it.el.style.opacity !== '0');
+      if (onScreen.length >= 4 && visible.length > 0 && visible.length < onScreen.length) onScreen.forEach((o) => hideLabel(o.it));
     }
   }
 

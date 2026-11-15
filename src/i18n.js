@@ -41,6 +41,14 @@ export const STRINGS = {
     hintOk: 'გასაგებია',
     bgStandard: 'სტანდარტული', bgReal: 'რეალური გარემო',
     renderView: 'რენდერი', view3d: '3D',
+    places: 'ადგილები', placesAll: 'ყველა',
+    docTitle: 'ჰისნი · Hisni by Biograpi — 3D',
+    docDesc: 'ჰისნი — ბიოგრაფი ლივინგის მულტიფუნქციური საცხოვრებელი კომპლექსი ისანში, ისნის მეტროს მოპირდაპირედ. ოთხი 36-სართულიანი თაუერი.',
+    viewportAria: '3D ხედი. გადაათრიე დასატრიალებლად, ორი თითით ან სქროლით — მასშტაბი.',
+    langToEn: 'EN, ინგლისურზე გადართვა',
+    langToKa: 'ქართულზე გადართვა',
+    projectName: 'ჰისნი',
+    minShort: 'წთ',
     spinPrev: 'წინა კადრი', spinNext: 'შემდეგი კადრი',
     placeholderFrame: 'მონახაზი',
     spinHint: 'გადაათრიე ჰორიზონტალურად ხედის შესაბრუნებლად',
@@ -116,6 +124,14 @@ export const STRINGS = {
     hintOk: 'Got it',
     bgStandard: 'Standard', bgReal: 'Real surroundings',
     renderView: 'Render', view3d: '3D',
+    places: 'Places', placesAll: 'All',
+    docTitle: 'Hisni by Biograpi — 3D',
+    docDesc: 'Hisni is a multifunctional residential complex by Biograpi Living in Isani, directly opposite Isani metro. Four 36-storey towers.',
+    viewportAria: '3D view. Drag to orbit, pinch or scroll to zoom.',
+    langToEn: 'Switch to English',
+    langToKa: 'Switch to Georgian',
+    projectName: 'Hisni',
+    minShort: 'min',
     spinPrev: 'Previous frame', spinNext: 'Next frame',
     placeholderFrame: 'Placeholder',
     spinHint: 'Drag sideways to turn the view',
@@ -138,14 +154,14 @@ export const STRINGS = {
       'The project infrastructure includes a 40,000 sq.m shopping centre, 8,000 sq.m of recreational space, a 25 m pool, a fitness gym, a padel court, basketball and football courts, and cafés and restaurants.',
       'In the architecture, special attention is dedicated to the facade clad in terracotta and fiber cement. Terracotta offers exceptional durability against temperature fluctuations and UV radiation, while fiber cement serves as an eco-friendly and energy-efficient material.',
       'Total investment USD 241 million, including USD 100.5 million financing from Bank of Georgia.'],
-    aboutSchedule: 'Towers I and II complete in September 2028, built by Element Construction („ელემენტ ქონსთრაქშენი“).',
+    aboutSchedule: 'Towers I and II complete in September 2028, built by Element Construction.',
     investSrc: 'Source: biograpi.ge, 9 Nov 2025',
     investSrcUrl: 'https://biograpi.ge/ka/news/Hisnientersactivephase',
     gallery: 'Renders', method: 'How to read this map',
     methodBody: 'Surrounding streets, buildings and greenery come from OpenStreetMap. Where a height is not mapped it is estimated. The complex massing is built from the master plan and the typical floor plan and is illustrative — final facade materials and colors are still being confirmed.',
     address: '69 Ketevan Dedofali Ave, Isani, Tbilisi',
     centerCat: 'The project', exploreTower: 'Explore apartments', list: 'Apartment list', noResults: 'No apartments match.',
-    attribution: 'Illustrative 3D view', lang: 'ქა', webglOff: '3D view is not available on this device — use the list and plans.',
+    attribution: 'Illustrative 3D view', lang: 'KA', webglOff: '3D view is not available on this device — use the list and plans.',
     siteData: 'biograpi.ge data', siteSrc: 'Status and price: biograpi.ge data', '3br': '3 bedrooms', penthouse: 'Penthouse',
     typeCode: 'Layout', floorsN: 'floors', min: 'min', max: 'max', statSrc: 'Source: biograpi.ge, 3 Nov 2026', statSrcUrl: 'https://biograpi.ge/ka/news/hisni-presale-start',
     dirs: { N: 'North', NE: 'North-east', E: 'East', SE: 'South-east', S: 'South', SW: 'South-west', W: 'West', NW: 'North-west' },
@@ -155,4 +171,9 @@ export const STRINGS = {
 let lang = typeof window === 'undefined' ? 'ka' : ((new URLSearchParams(location.search).get('lang') || localStorage.getItem('hisni-lang') || 'ka') === 'en' ? 'en' : 'ka');
 export const getLang = () => lang;
 export const setLang = (l) => { lang = l; localStorage.setItem('hisni-lang', l); document.documentElement.lang = l; };
-export const t = (k) => STRINGS[lang][k] ?? STRINGS.ka[k] ?? k;
+export const t = (k) => {
+  const cur = STRINGS[lang]?.[k];
+  if (cur != null) return cur;
+  if (lang === 'en') return STRINGS.en[k] ?? k;
+  return STRINGS.ka[k] ?? k;
+};

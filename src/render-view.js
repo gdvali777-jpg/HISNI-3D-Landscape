@@ -69,14 +69,16 @@ export async function createRenderView(opts) {
   if (!root || !stage || !img || !svg) return null;
 
   const cfg = await (await fetch(`${BASE}data/render-frames.json`)).json();
-  const frames = cfg.frames;
+  const allFrames = cfg.frames;
+  let mode = 'day';
+  let frames = allFrames.filter((f) => (f.mode || 'day') === mode);
+  const fade = document.querySelector('#render-fade');
   let index = 0;
   let selected = null;
   let zoom = null;
   let viewZoom = 1;
   let panX = 0;
   let panY = 0;
-  let menuOpen = false;
   let animLayout = false;
   let readySrc = '';
   const cache = new Map();
@@ -106,8 +108,18 @@ export async function createRenderView(opts) {
   }
 
   function setImage(src) {
-    if (img.getAttribute('src') !== src) img.src = src;
-    if (blur && blur.getAttribute('src') !== src) blur.src = src;
+    if ((img.getAttribute('src') || '') === src) return;
+    const prev = img.getAttribute('src');
+    if (fade && prev) {
+      fade.src = prev;
+      fade.style.transition = 'none';
+      fade.style.opacity = '1';
+      void fade.offsetWidth;
+      fade.style.transition = '';
+      fade.style.opacity = '0';
+    }
+    img.src = src;
+    if (blur) blur.src = src;
   }
   function layout() {
     const frame = frames[index];
@@ -154,31 +166,18 @@ export async function createRenderView(opts) {
     return compact ? `${id} ${n}` : `${id} ${n} ${opts.t('avail')}`;
   }
 
-  function paintBlockMenu() {
-    const btn = document.querySelector('#render-block-btn');
-    const menu = document.querySelector('#render-block-menu');
-    if (!btn || !menu) return;
-    const current = selected ? `${selected} ▾` : `${opts.t('block')} ▾`;
-    btn.textContent = current;
-    btn.setAttribute('aria-expanded', String(menuOpen));
-    btn.setAttribute('aria-label', selected ? `${opts.t('block')}: ${chipText(selected, false)}` : opts.t('block'));
-    const allOn = !selected;
-    const options = [`<button type="button" role="radio" data-block="" aria-checked="${allOn}" tabindex="${allOn ? 0 : -1}" class="${allOn ? 'is-on' : ''}">${opts.t('allBlocks')}</button>`];
-    for (const id of opts.blockIds()) {
-      const on = selected === id;
-      const count = opts.block(id)?.has_data ? opts.freeCount(id) : opts.t('soon');
-      options.push(`<button type="button" role="radio" data-block="${id}" aria-checked="${on}" tabindex="${on ? 0 : -1}" class="${on ? 'is-on' : ''}"><span>${id}</span><small>${count}</small></button>`);
-    }
-    menu.innerHTML = options.join('');
-    menu.hidden = !menuOpen;
-    menu.setAttribute('aria-label', opts.t('block'));
+  function paintModes() {
+    const day = document.querySelector('#day-mode');
+    const night = document.querySelector('#night-mode');
+    if (day) { day.textContent = opts.t('day'); day.setAttribute('aria-pressed', String(mode === 'day')); day.setAttribute('aria-label', opts.t('day')); }
+    if (night) { night.textContent = opts.t('night'); night.setAttribute('aria-pressed', String(mode === 'night')); night.setAttribute('aria-label', opts.t('night')); }
   }
   function paintChrome() {
     const dots = document.querySelector('#render-dots');
     const label = document.querySelector('#render-frame-label');
     const ph = document.querySelector('#render-ph');
     const frame = frames[index];
-    paintBlockMenu();
+    paintModes();
     if (dots) {
       dots.innerHTML = frames.map((f, i) => `<button type="button" data-frame="${i}" class="${i === index ? 'is-on' : ''} ${f.stop ? 'is-stop' : ''}" aria-label="${f.label?.[opts.lang()] || f.id}" aria-current="${i === index ? 'true' : 'false'}"></button>`).join('');
     }
@@ -243,8 +242,8 @@ export async function createRenderView(opts) {
     img.alt = frame.label?.[opts.lang()] || 'Hisni';
   }
 
-  function selectBlock(id, { toggle = true, closeMenu = true } = {}) {
-    if (id && !frames[index].blocks?.[id]) return;
+  function selectBlock(id, { toggle = true, notify = false } = {}) {
+    if (id && !frames[index]?.blocks?.[id]) return;
     if (!id) selected = null;
     else if (toggle && selected === id) selected = null;
     else selected = id;
@@ -252,10 +251,10 @@ export async function createRenderView(opts) {
       const c = centroid(frames[index].blocks[selected]);
       zoom = { x: c[0], y: c[1], scale: 1.75 };
     } else zoom = null;
-    if (closeMenu) menuOpen = false;
     animLayout = true;
     draw();
     animLayout = false;
+    if (notify) opts.onBlock?.(selected);
     if (selected && !opts.block(selected)?.has_data) opts.onSoon(selected);
   }
 
@@ -285,14 +284,14 @@ export async function createRenderView(opts) {
     const floor = e.target.closest?.('[data-floor]');
     if (floor) { opts.onFloor(floor.dataset.block, +floor.dataset.floor); return; }
     const block = e.target.closest?.('[data-block]');
-    if (block) selectBlock(block.dataset.block);
+    if (block) selectBlock(block.dataset.block, { toggle: true, notify: true });
   });
   svg.addEventListener('keydown', (e) => {
     const el = e.target.closest?.('[data-block]');
     if (!el || (e.key !== 'Enter' && e.key !== ' ')) return;
     e.preventDefault();
     if (el.dataset.floor) opts.onFloor(el.dataset.block, +el.dataset.floor);
-    else selectBlock(el.dataset.block);
+    else selectBlock(el.dataset.block, { toggle: true, notify: true });
   });
 
   const pointers = new Map();
@@ -350,19 +349,7 @@ export async function createRenderView(opts) {
     const next = e.target.closest('[data-spin="1"]');
     if (prev || next) { showFrame(index + (prev ? -1 : 1)); return; }
     const dot = e.target.closest('[data-frame]');
-    if (dot) { selected = null; zoom = null; showFrame(+dot.dataset.frame); return; }
-    if (e.target.closest('#render-block-btn')) {
-      menuOpen = !menuOpen;
-      paintBlockMenu();
-      if (menuOpen) document.querySelector('#render-block-menu [aria-checked="true"]')?.focus();
-      return;
-    }
-    const opt = e.target.closest('#render-block-menu [role="radio"]');
-    if (opt) {
-      selectBlock(opt.dataset.block || null, { toggle: false });
-      document.querySelector('#render-block-btn')?.focus();
-      return;
-    }
+    if (dot) { selected = null; zoom = null; opts.onBlock?.(null); showFrame(+dot.dataset.frame); return; }
     if (e.target.closest('[data-reset]')) { opts.resetFilters(); paintFilterForm(); draw(); }
   });
   root.addEventListener('input', (e) => {
@@ -372,61 +359,32 @@ export async function createRenderView(opts) {
     draw();
   });
 
-  document.querySelector('#render-blocks')?.addEventListener('keydown', (e) => {
-    const menu = document.querySelector('#render-block-menu');
-    const btn = document.querySelector('#render-block-btn');
-    if (!menu || !btn) return;
-    const radios = () => [...menu.querySelectorAll('[role="radio"]')];
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      menuOpen = false;
-      paintBlockMenu();
-      btn.focus();
-      return;
-    }
-    if (e.target === btn && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) {
-      e.preventDefault();
-      e.stopPropagation();
-      menuOpen = true;
-      paintBlockMenu();
-      (menu.querySelector('[aria-checked="true"]') || menu.querySelector('[role="radio"]'))?.focus();
-      return;
-    }
-    if (!menuOpen || !e.target.closest('#render-block-menu')) return;
-    const list = radios();
-    const i = list.indexOf(document.activeElement);
-    const go = (n) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const el = list[(n + list.length) % list.length];
-      selectBlock(el?.dataset.block || null, { toggle: false, closeMenu: false });
-      document.querySelector(`#render-block-menu [data-block="${el?.dataset.block || ''}"]`)?.focus();
-    };
-    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') go(i + 1);
-    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') go((i < 0 ? 0 : i) - 1);
-    if (e.key === 'Home') go(0);
-    if (e.key === 'End') go(list.length - 1);
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      e.stopPropagation();
-      menuOpen = false;
-      paintBlockMenu();
-      btn.focus();
-    }
-  });
-  document.addEventListener('pointerdown', (e) => {
-    if (!menuOpen || e.target.closest('#render-blocks')) return;
-    menuOpen = false;
-    paintBlockMenu();
+  document.querySelector('#day-night')?.addEventListener('click', (e) => {
+    const day = e.target.closest('#day-mode');
+    const night = e.target.closest('#night-mode');
+    if (!day && !night) return;
+    const next = day ? 'day' : 'night';
+    if (next === mode) return;
+    mode = next;
+    frames = allFrames.filter((f) => (f.mode || 'day') === mode);
+    index = 0;
+    selected = null;
+    zoom = null;
+    viewZoom = 1;
+    panX = 0;
+    panY = 0;
+    opts.onBlock?.(null);
+    const nightFrame = allFrames.find((f) => f.mode === 'night');
+    if (nightFrame) preload(`${BASE}${nightFrame.thumb}`);
+    showFrame(0, { immediate: true });
   });
   window.addEventListener('keydown', (e) => {
     if (root.hidden) return;
     if (e.target.matches('input, textarea')) return;
-    if (e.target.closest('#render-block-menu')) return;
+    if (e.target.closest('#block-menu, #places-panel, #block-picker')) return;
     if (e.key === 'ArrowLeft') { e.preventDefault(); showFrame(index - 1); }
     if (e.key === 'ArrowRight') { e.preventDefault(); showFrame(index + 1); }
-    if (e.key === 'Escape' && selected) { selected = null; zoom = null; menuOpen = false; draw(); }
+    if (e.key === 'Escape' && selected) { selected = null; zoom = null; opts.onBlock?.(null); draw(); }
   });
   new ResizeObserver(() => { if (!root.hidden) layout(); }).observe(root);
 
@@ -436,12 +394,20 @@ export async function createRenderView(opts) {
       root.hidden = false;
       document.documentElement.classList.add('boot-render');
       await showFrame(index, { immediate: true });
+      const nightFrame = allFrames.find((f) => f.mode === 'night');
+      const preloadNight = () => { if (nightFrame) preload(`${BASE}${nightFrame.thumb}`); };
+      if (window.requestIdleCallback) requestIdleCallback(preloadNight, { timeout: 1500 });
+      else setTimeout(preloadNight, 600);
     },
     hide() { root.hidden = true; tip.hidden = true; },
     refresh() { if (!root.hidden) { paintFilterForm(); draw(); } },
     zoomBy(f) { setZoom(viewZoom * f); },
+    block() { return selected; },
+    setBlock(id) { selectBlock(id || null, { toggle: false, notify: false }); },
+    mode() { return mode; },
     home() {
-      viewZoom = 1; panX = 0; panY = 0; selected = null; zoom = null; menuOpen = false;
+      viewZoom = 1; panX = 0; panY = 0; selected = null; zoom = null;
+      opts.onBlock?.(null);
       animLayout = true;
       showFrame(0, { immediate: true }).then(() => { animLayout = false; });
     },
