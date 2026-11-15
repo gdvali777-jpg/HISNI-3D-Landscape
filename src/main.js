@@ -232,7 +232,9 @@ function showOnly(panel) {
   app.classList.toggle('side-sheet', panel === 'apt' || panel === 'filters');
   state.scene?.request();
 }
-let fromPop = false, seeded = false, pushed = 0, histDepth = 0, seedDepth = 0;
+let fromPop = false, seeded = false, pushed = 0, histDepth = 0, seedDepth = 0, histBlock = '';
+let skipFiltersParam = false;
+let blockSwallow = false;
 let bootQuery = new URLSearchParams(typeof location === 'undefined' ? '' : location.search);
 let mapMode = null;
 function depthNow() { if (state.apt) return 4; return { intro: 0, towers: 1, block: 2, floor: 3 }[state.view] ?? 0; }
@@ -248,10 +250,10 @@ function urlForState() {
   if (getLang() === 'en') p.set('lang', 'en');
   if (bootQuery.get('webgl') === '0') p.set('webgl', '0');
   if (bootQuery.get('bg') === 'real') p.set('bg', 'real');
-  if (renderMode && (p.get('view') || state.filters?.block)) p.set('mode', 'render');
+  if (renderMode) p.set('mode', 'render');
   const quality = bootQuery.get('quality'); if (quality) p.set('quality', quality);
   const light = bootQuery.get('light'); if (light) p.set('light', light);
-  if (!$('#filters').hidden) p.set('filters', '1');
+  if (!$('#filters').hidden && !skipFiltersParam) p.set('filters', '1');
   const q = p.toString();
   return location.pathname + (q ? `?${q}` : '');
 }
@@ -260,13 +262,16 @@ function syncHistory() {
   const url = urlForState();
   const d = depthNow();
   const here = location.pathname + location.search;
-  if (!seeded) { history.replaceState({ hisni: d, render: renderMode }, '', url); seeded = true; histDepth = d; seedDepth = d; pushed = 0; histRender = renderMode; return; }
-  if (here === url) { histDepth = d; histRender = renderMode; return; }
+  const blockNow = state.filters?.block || '';
+  if (!seeded) { history.replaceState({ hisni: d, render: renderMode, block: blockNow }, '', url); seeded = true; histDepth = d; seedDepth = d; pushed = 0; histRender = renderMode; histBlock = blockNow; return; }
+  if (here === url) { histDepth = d; histRender = renderMode; histBlock = blockNow; return; }
   const crossing = histRender !== renderMode;
-  if (crossing || d > histDepth) { history.pushState({ hisni: d, render: renderMode }, '', url); pushed += 1; }
-  else history.replaceState({ hisni: d, render: renderMode }, '', url);
+  const blockChanged = blockNow !== histBlock;
+  if (crossing || d > histDepth || blockChanged) { history.pushState({ hisni: d, render: renderMode, block: blockNow }, '', url); pushed += 1; }
+  else history.replaceState({ hisni: d, render: renderMode, block: blockNow }, '', url);
   histDepth = d;
   histRender = renderMode;
+  histBlock = blockNow;
 }
 function applyDeepLink(params) {
   mapMode = params.get('view') === 'neighborhood' ? 'neighborhood' : null;
@@ -309,7 +314,7 @@ function seedHistory() {
     history.pushState({ hisni: depthNow() }, '', urlForState());
   }
   Object.assign(state, target);
-  seeded = true; seedDepth = 0; histDepth = d; pushed = d; histRender = renderMode;
+  seeded = true; seedDepth = 0; histDepth = d; pushed = d; histRender = renderMode; histBlock = state.filters?.block || '';
 }
 function renderShell() {
   paintIntro();
@@ -325,9 +330,12 @@ function applyHistoryUrl() {
     applyDeepLink(p);
     if (!renderMode) openRender();
     else {
-      const carry = (state.view === 'block' || state.view === 'floor') ? state.tower : null;
-      if (carry) renderApi?.setBlock(carry);
-      else renderApi?.home();
+      const block = state.filters.block;
+      if (block) renderApi?.setBlock(block);
+      else renderApi?.setBlock(null);
+      blockMenu?.refresh();
+      if (p.get('filters') === '1') { showOnly('filters'); renderFilters(); }
+      else if (!$('#filters').hidden) renderFilters();
     }
     paintViewToggle();
     return;
@@ -347,14 +355,24 @@ function applyHistoryUrl() {
     else if (state.view === 'towers') setView('towers', { tower: null });
     else setView('intro', { tower: null, floor: null });
     if (p.get('filters') === '1') { showOnly('filters'); renderFilters(); }
+    else if (!$('#filters').hidden) renderFilters();
+    blockMenu?.refresh();
+  };
+  const paintRestored = () => {
+    document.documentElement.dataset.view = state.view;
+    blockMenu?.refresh();
+    if (p.get('filters') === '1') { showOnly('filters'); renderFilters(); }
+    else if (!$('#filters').hidden) renderFilters();
   };
   if (!state.scene && !app.classList.contains('fallback')) {
+    paintRestored();
     const webgl = hasWebGL() && p.get('webgl') !== '0';
     if (!webgl) { startFallback(); return; }
     start3D(p, ctxPromise);
     return;
   }
   show3D();
+  paintRestored();
 }
 window.addEventListener('popstate', () => {
   if (tourOpen || tourClosing) {
@@ -367,6 +385,8 @@ window.addEventListener('popstate', () => {
   fromPop = true;
   applyHistoryUrl();
   histDepth = typeof history.state?.hisni === 'number' ? history.state.hisni : depthNow();
+  histBlock = state.filters?.block || '';
+  histRender = renderMode;
   pushed = Math.max(0, histDepth - seedDepth);
   fromPop = false;
 });
@@ -718,12 +738,14 @@ function blockFilterField(f) {
   const opt = (id, text, on) => `<button type="button" role="option" data-filter-block="${id}" aria-selected="${on}"><span>${text}</span>${on ? '<i class="tick" aria-hidden="true">✓</i>' : ''}</button>`;
   return `<fieldset class="block-filter"><legend>${t('block')}</legend>
     <button type="button" class="block-drop" aria-expanded="${blockDropOpen}" aria-controls="block-filter-menu">${esc(label)} <span aria-hidden="true">▾</span></button>
+    ${blockDropOpen ? '<div class="block-drop-backdrop" data-block-backdrop></div>' : ''}
     <div id="block-filter-menu" class="block-drop-menu" role="listbox" aria-label="${esc(t('block'))}" ${blockDropOpen ? '' : 'hidden'}>
       ${opt('', t('allBlocks'), !current)}
       ${blocks.map((b) => opt(b.id, b.id, current === b.id)).join('')}
     </div></fieldset>`;
 }
 function renderFilters() {
+  document.querySelectorAll('body > .block-drop-menu, body > .block-drop-backdrop').forEach((n) => n.remove());
   const el = $('#filters'); const f = state.filters;
   const scroll = el.scrollTop;
   const group = (a) => (a.status === 'available' ? 0 : a.status === 'queue' ? 1 : a.status === 'reserved' ? 2 : a.status === 'sold' ? 3 : 4);
@@ -746,6 +768,28 @@ function renderFilters() {
     <p class="note">${t('priceUpdated')} ${snapDate()}</p>
     <div class="filter-foot"><button class="btn-ghost" data-reset>${t('reset')}</button><button class="primary" data-close>${t('showList')} (${f.block ? viewCount : res.length})</button></div>`;
   el.scrollTop = scroll;
+  placeBlockMenu();
+}
+function placeBlockMenu() {
+  const btn = document.querySelector('#filters .block-drop');
+  const menu = document.getElementById('block-filter-menu');
+  const backdrop = document.querySelector('#filters [data-block-backdrop]');
+  if (!btn || !menu || menu.hidden) return;
+  if (backdrop) document.body.append(backdrop);
+  document.body.append(menu);
+  const r = btn.getBoundingClientRect();
+  const gap = 6;
+  const height = menu.offsetHeight;
+  const below = window.innerHeight - r.bottom;
+  const top = below >= height + gap + 8 ? r.bottom + gap : Math.max(8, r.top - height - gap);
+  menu.style.top = `${Math.round(top)}px`;
+  menu.style.left = `${Math.round(Math.max(8, r.left))}px`;
+  menu.style.width = `${Math.round(Math.min(r.width, window.innerWidth - 16))}px`;
+}
+function swallowBlockEvent() {
+  blockSwallow = true;
+  clearTimeout(swallowBlockEvent.timer);
+  swallowBlockEvent.timer = setTimeout(() => { blockSwallow = false; }, 450);
 }
 function readFilters() {
   const fd = new FormData($('#ff')); const f = state.filters;
@@ -755,31 +799,39 @@ function readFilters() {
 }
 let fT; let filterLimit = 40;
 $('#filters').addEventListener('input', () => { clearTimeout(fT); fT = setTimeout(() => { readFilters(); const foc = document.activeElement?.name; renderFilters(); if (foc) $(`#filters [name="${foc}"]`)?.focus(); renderExplorer(); recolor(); renderApi?.refresh(); }, 250); });
-$('#filters').addEventListener('pointerdown', (e) => {
-  if (!blockDropOpen || e.target.closest('.block-filter')) return;
+document.addEventListener('click', (e) => {
+  if (!blockSwallow) return;
+  blockSwallow = false;
+  if (e.target.closest('.block-drop')) return;
+  e.preventDefault();
+  e.stopPropagation();
+}, true);
+document.addEventListener('pointerup', (e) => {
+  const backdrop = e.target.closest('[data-block-backdrop]');
+  const blockOpt = e.target.closest('[data-filter-block]');
+  if (!backdrop && !blockOpt) return;
+  e.preventDefault();
+  e.stopPropagation();
+  swallowBlockEvent();
+  if (backdrop) { blockDropOpen = false; renderFilters(); return; }
+  const id = blockOpt.dataset.filterBlock;
+  const next = !id || id === state.filters.block ? null : id;
   blockDropOpen = false;
-  const menu = $('#block-filter-menu');
-  if (menu) menu.hidden = true;
-  $('.block-drop')?.setAttribute('aria-expanded', 'false');
+  chooseBlock(next);
 });
 $('#filters').addEventListener('click', (e) => {
-  if (e.target.closest('.block-drop')) { blockDropOpen = !blockDropOpen; renderFilters(); return; }
-  const blockOpt = e.target.closest('[data-filter-block]');
-  if (blockOpt) {
-    const id = blockOpt.dataset.filterBlock;
-    const next = !id || id === state.filters.block ? null : id;
-    blockDropOpen = false;
-    chooseBlock(next);
-    return;
-  }
+  if (e.target.closest('.block-drop')) { e.preventDefault(); e.stopPropagation(); blockDropOpen = !blockDropOpen; renderFilters(); return; }
+  if (blockSwallow) { e.preventDefault(); e.stopPropagation(); blockSwallow = false; return; }
+  if (e.target.closest('[data-filter-block]') || e.target.closest('[data-block-backdrop]')) { e.preventDefault(); e.stopPropagation(); return; }
   if (e.target.closest('[data-reset]')) {
     blockDropOpen = false;
     state.filters = defaultFilters();
     filterLimit = 40;
     const keep = true;
-    if (renderMode) { renderApi?.setBlock(null); blockMenu?.refresh(); renderFilters(); renderExplorer(); recolor(); renderApi?.refresh(); syncHistory(); return; }
-    if (state.view === 'block' || state.view === 'floor') { setView('intro', { tower: null, floor: null, keepSheet: keep }); return; }
-    renderFilters(); renderExplorer(); recolor(); renderApi?.refresh();
+    skipFiltersParam = true;
+    if (renderMode) { renderApi?.setBlock(null); blockMenu?.refresh(); renderFilters(); renderExplorer(); recolor(); renderApi?.refresh(); syncHistory(); skipFiltersParam = false; return; }
+    if (state.view === 'block' || state.view === 'floor') { setView('intro', { tower: null, floor: null, keepSheet: keep }); skipFiltersParam = false; return; }
+    renderFilters(); renderExplorer(); recolor(); renderApi?.refresh(); syncHistory(); skipFiltersParam = false;
     return;
   }
   if (e.target.closest('[data-more]')) { filterLimit += 40; renderFilters(); return; }
