@@ -450,7 +450,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     });
     return out;
   }
-  const LABEL_AVOID = '#intro, #explorer, .sheet, .layers, .tools, .place-card, .crumbs, .header, .map-meta, footer, #hint, #toast, #bg-switch, #block-picker, .day-night, #view-toggle';
+  const LABEL_AVOID = '#intro, #explorer, .sheet, .layers, .tools, .place-card, .crumbs, .header, .map-meta, footer, #hint, #toast, #bg-switch, #block-picker, #places-panel, .day-night, #view-toggle';
   const hit = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
   function updateLabels(precise) {
     const w = container.clientWidth, h = container.clientHeight;
@@ -1023,6 +1023,50 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         if (wanted.length >= 4 && shown.length > 0 && shown.length < wanted.length) wanted.forEach((o) => hideLabel(o.it));
       }
     }
+    placePoiMarkers();
+    function placePoiMarkers() {
+      const pois = items.filter((o) => o.it.el.classList.contains('poi-on') && !o.it.el.hidden);
+      const towers = items.filter((o) => o.it.isTower && o.it.el.style.opacity !== '0').map((o) => rectOf(o.it));
+      const placed = [];
+      const hits = (box) => panels.some((p) => overlap(box, p)) || towers.some((p) => overlap(box, p)) || placed.some((p) => overlap(box, p));
+      const seek = (o, lw) => {
+        const lh = 44;
+        const steps = [0, 104, -104, 208, -208, 52, -52];
+        const downs = [0, 50, -50, 100, 150];
+        for (const dy of downs) {
+          for (const dx of steps) {
+            const cx = Math.min(w - 8 - lw / 2, Math.max(8 + lw / 2, o.sx + dx));
+            const top = Math.min(h - 8 - lh, Math.max(8, o.sy - lh - 8 + dy));
+            const box = { l: cx - lw / 2, t: top, r: cx + lw / 2, b: top + lh };
+            if (box.l < 2 || box.r > w - 2 || box.t < 2 || box.b > h - 2) continue;
+            if (hits(box)) continue;
+            return box;
+          }
+        }
+        return null;
+      };
+      const ordered = pois.slice().sort((a, b) => (b.it.el.classList.contains('is-hot') - a.it.el.classList.contains('is-hot')) || (a.sy - b.sy));
+      for (const o of ordered) {
+        const it = o.it;
+        const hot = it.el.classList.contains('is-hot');
+        if (!o.vis && !hot) { hideLabel(it); it.el.style.width = ''; continue; }
+        const fullW = Math.min(w > 800 ? 320 : 248, 112 + (Number(it.el.dataset.len) || 8) * 8);
+        let found = seek(o, fullW);
+        let compact = false;
+        if (!found) { found = seek(o, 108); compact = true; }
+        if (!found) { hideLabel(it); it.el.style.width = ''; continue; }
+        it.el.classList.toggle('is-compact', compact);
+        it.el.style.width = `${Math.round(found.r - found.l)}px`;
+        it._lw = found.r - found.l;
+        it._lh = 44;
+        it._lx = (found.l + found.r) / 2;
+        it._lift = 0;
+        it._sy = found.b;
+        reveal(it);
+        commit(it);
+        placed.push(found);
+      }
+    }
   }
 
   // render-on-demand loop
@@ -1187,6 +1231,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
   }
   return {
     renderer, camera, controls, setLight, views, focusTower, focusFloor, highlightTower, buildFloor, clearFloor, recolorApts, addLabel, request,
+    focusPoint(x, z) { flyTo(new THREE.Vector3(x - 70, 60, z + 110), new THREE.Vector3(x, 8, z), 0.85); },
     setLayer(name, on) { if (name === 'labels') return; layerWant[name] = on; applyLayerVis(); shadowsDirty(); request(); },
     setRealView(id) {
       if (id === 'standard') {
