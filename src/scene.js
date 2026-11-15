@@ -506,6 +506,12 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     // write phase: try positions above the anchor, then beside the blocking tower (leader line)
     for (const o of items) {
       const { it } = o; let lx = o.sx, lift = 0, show = o.vis;
+      if (it.el.classList.contains('tour-pin')) {
+        it.el.style.opacity = '0';
+        it.el.style.pointerEvents = 'none';
+        it.el.setAttribute('aria-hidden', 'true');
+        continue;
+      }
       const PAD = 12;
       const rectAt = (x, d) => [x - o.lw / 2 - 4, o.sy - 14 - d - o.lh - 4, x + o.lw / 2 + 4, o.sy - 14 - d + 4];
       const clampX = (x) => Math.min(w - PAD - o.lw / 2 - 4, Math.max(PAD + o.lw / 2 + 4, x));
@@ -1024,6 +1030,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
       }
     }
     placePoiMarkers();
+    placeTourPins();
     function placePoiMarkers() {
       const pois = items.filter((o) => o.it.el.classList.contains('poi-on') && !o.it.el.hidden);
       const grow = (b, n) => ({ l: b.l - n, t: b.t - n, r: b.r + n, b: b.b + n });
@@ -1078,6 +1085,60 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         const shifted = Math.abs(it._lx - it._sx) > 1;
         const visual = shifted ? { l: found.l, t: found.t - 14, r: found.r, b: found.b - 14 } : found;
         placed.push({ l: visual.l - 2, t: visual.t - 2, r: visual.r + 2, b: visual.b + (shifted ? 2 : 16) });
+      }
+    }
+    function placeTourPins() {
+      const tours = items.filter((o) => o.it.el.classList.contains('tour-pin') && !o.it.el.hidden);
+      if (!tours.length) return;
+      const blocks = [];
+      const add = (b) => { if (b && b.r > b.l + 2 && b.b > b.t + 2) blocks.push(b); };
+      for (const p of panels) add(p);
+      for (const o of items) {
+        if (o.it.el.classList.contains('tour-pin')) continue;
+        if (o.it.el.style.opacity === '0' || o.it.el.hidden) continue;
+        add(rectOf(o.it));
+      }
+      const hits = (box) => box.l < 4 || box.t < 4 || box.r > w - 4 || box.b > h - 4 || blocks.some((p) => overlap(box, p));
+      const seek = (o, lw, lh, wide) => {
+        const step = lw + 8;
+        const steps = wide ? [0, step, -step, step * 2, -step * 2, step * 3, -step * 3] : [0, step, -step];
+        const downs = wide ? [0, 48, -48, 96, -96] : [0, 52, -52];
+        for (const dy of downs) {
+          for (const dx of steps) {
+            const cx = Math.min(w - 8 - lw / 2, Math.max(8 + lw / 2, o.sx + dx));
+            const top = Math.min(h - 8 - lh, Math.max(8, o.sy - lh - 10 + dy));
+            const box = { l: cx - lw / 2, t: top, r: cx + lw / 2, b: top + lh };
+            if (hits(box)) continue;
+            return box;
+          }
+        }
+        return null;
+      };
+      for (const o of tours) {
+        const it = o.it;
+        if (!it.leader) {
+          it.leader = document.createElement('i');
+          it.leader.className = 'leader';
+          it.el.parentNode?.appendChild(it.leader);
+        }
+        if (!o.vis) { hideLabel(it); it.el.classList.remove('is-compact'); it.el.style.width = ''; continue; }
+        const chars = it.el.querySelector('.tour-name')?.textContent.length || 12;
+        const fullW = Math.min(w > 800 ? 220 : 176, Math.max(128, chars * (document.documentElement.lang === 'ka' ? 8.6 : 7) + 40));
+        let found = seek(o, fullW, 44, false);
+        let compact = false;
+        if (!found) { found = seek(o, 44, 44, true); compact = true; }
+        if (!found) { hideLabel(it); it.el.classList.remove('is-compact'); it.el.style.width = ''; continue; }
+        it.el.classList.toggle('is-compact', compact);
+        it.el.style.width = `${Math.round(found.r - found.l)}px`;
+        it._lw = found.r - found.l;
+        it._lh = 44;
+        it._lx = (found.l + found.r) / 2;
+        it._lift = 0;
+        it._sx = o.sx;
+        it._sy = found.b;
+        reveal(it);
+        commit(it);
+        blocks.push(found);
       }
     }
   }
@@ -1244,6 +1305,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
   }
   return {
     renderer, camera, controls, setLight, views, focusTower, focusFloor, highlightTower, buildFloor, clearFloor, recolorApts, addLabel, request,
+    tourAnchors: [1, 2, 3].map((id) => ({ id, x: REAL_VIEWS[id].pos[0], y: REAL_VIEWS[id].pos[1], z: REAL_VIEWS[id].pos[2] })),
     focusPoint(x, z) { flyTo(new THREE.Vector3(x - 70, 60, z + 110), new THREE.Vector3(x, 8, z), 0.85); },
     setLayer(name, on) { if (name === 'labels') return; layerWant[name] = on; applyLayerVis(); shadowsDirty(); request(); },
     setRealView(id) {

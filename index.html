@@ -147,6 +147,7 @@
       <h1><span data-i18n="title">ჰისნი</span> <em data-i18n="titleSub">15-წუთიანი ქალაქი</em></h1>
       <div class="intro-actions">
         <button id="start" class="primary" data-i18n="explore">აირჩიე ბინა</button>
+        <button id="intro-tour" type="button" class="tour-cta" data-i18n="tour" data-tour-view="1">360° ტური</button>
         <a id="intro-call" class="call-btn" href="tel:+995322500505" data-call="intro">დარეკვა</a>
       </div>
     </div>
@@ -170,6 +171,7 @@
         title: 'Hisni',
         titleSub: 'A 15-minute city',
         explore: 'Find an apartment',
+        tour: '360° Tour',
         address: '69 Ketevan Dedofali Ave, Isani, Tbilisi',
         introCopy: 'A multifunctional residential complex directly opposite the Isani metro station.',
         statTowers: 'Towers',
@@ -215,6 +217,7 @@
   </aside>
 
   <nav class="tools panel" aria-label="Camera">
+    <button id="tour-cam" type="button" data-tour-view="1" data-i18n-aria="tour">360°</button>
     <button id="zoom-in" data-i18n-aria="zoomIn">+</button>
     <button id="zoom-out" data-i18n-aria="zoomOut">−</button>
     <button id="rotate" data-i18n-aria="rotate" aria-pressed="false">⟳</button>
@@ -231,6 +234,12 @@
 
   <dialog id="about"></dialog>
   <dialog id="lead"></dialog>
+  <dialog id="tour" aria-modal="true">
+    <div id="tour-stage"></div>
+    <div class="tour-bar"><button type="button" id="tour-close" class="primary"></button></div>
+    <div class="tour-switch" role="group"></div>
+    <p class="tour-status" role="status" hidden></p>
+  </dialog>
 </main>
 <script type="module" src="./src/main.js"></script>
 </body>

@@ -120,6 +120,7 @@ function applyI18n() {
   syncPoi();
   if (state.place && !$('#place-card').hidden) showPlace(state.place);
   if ($('#about').open) openAbout();
+  paintTourChrome();
   paintViewToggle();
 }
 function paintViewToggle() {
@@ -344,11 +345,88 @@ function applyHistoryUrl() {
   show3D();
 }
 window.addEventListener('popstate', () => {
+  if (tourOpen || tourClosing) {
+    tourOpen = false;
+    tourPushed = false;
+    tourClosing = false;
+    hideTour();
+    return;
+  }
   fromPop = true;
   applyHistoryUrl();
   histDepth = typeof history.state?.hisni === 'number' ? history.state.hisni : depthNow();
   pushed = Math.max(0, histDepth - seedDepth);
   fromPop = false;
+});
+let tourOpen = false;
+let tourPushed = false;
+let tourClosing = false;
+let tourView = 1;
+let tourMod = null;
+let tourReady = false;
+let tourChain = Promise.resolve();
+function paintTourChrome() {
+  const dlg = $('#tour');
+  if (!dlg) return;
+  dlg.setAttribute('aria-label', t('tour'));
+  const close = $('#tour-close');
+  if (close) close.textContent = t('close');
+  const sw = dlg.querySelector('.tour-switch');
+  if (sw) sw.innerHTML = [1, 2, 3].map((n) => `<button type="button" data-tour-switch="${n}" aria-pressed="${n === tourView}">${t('tourScene')} ${n}</button>`).join('');
+  const status = dlg.querySelector('.tour-status');
+  if (status && !status.hidden && !tourMod) status.textContent = t('tourFail');
+}
+function hideTour() {
+  tourReady = false;
+  const dlg = $('#tour');
+  if (dlg?.open) dlg.close();
+  tourMod?.destroy();
+}
+function requestCloseTour() {
+  if (!tourOpen || tourClosing) return;
+  if (tourPushed) { tourClosing = true; history.back(); }
+  else { tourOpen = false; hideTour(); }
+}
+function openTour(n) {
+  const view = [1, 2, 3].includes(+n) ? +n : 1;
+  tourView = view;
+  const dlg = $('#tour');
+  paintTourChrome();
+  const status = dlg.querySelector('.tour-status');
+  if (!tourReady) { status.hidden = false; status.textContent = t('tourLoading'); }
+  if (!dlg.open) dlg.showModal();
+  if (!tourOpen) {
+    tourOpen = true;
+    tourClosing = false;
+    history.pushState({ ...(history.state || {}), hisni: typeof histDepth === 'number' ? histDepth : 0, tour: view }, '', location.href);
+    tourPushed = true;
+  }
+  const job = tourChain.then(async () => {
+    tourMod = tourMod || await import('./tour.js');
+    if (!tourOpen) return;
+    await tourMod.mount($('#tour-stage'), tourView);
+    if (!tourOpen) { tourMod.destroy(); return; }
+    tourReady = true;
+    status.hidden = true;
+  }).catch((e) => {
+    console.warn('[hisni] 360 tour', e);
+    if (!tourOpen) return;
+    status.hidden = false;
+    status.textContent = t('tourFail');
+  });
+  tourChain = job.then(() => {}, () => {});
+}
+$('#tour')?.addEventListener('cancel', (e) => { e.preventDefault(); requestCloseTour(); });
+$('#tour-close')?.addEventListener('click', () => requestCloseTour());
+$('#tour')?.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-tour-switch]');
+  if (!b) return;
+  openTour(b.dataset.tourSwitch);
+});
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-tour-view]');
+  if (!b || b.closest('#tour')) return;
+  openTour(b.dataset.tourView);
 });
 function setView(v, opts = {}) {
   expandSheet();
@@ -524,9 +602,10 @@ function renderCard() {
   if (!a) { if (!$('#apt-card').hidden) showOnly(basePanel()); return; }
   showOnly('apt');
   const ty = a.type; const tab = !ty.plan_2d ? '3d' : !ty.plan_3d ? '2d' : state.planTab; const img = tab === '3d' ? ty.plan_3d : ty.plan_2d; const src = /^https?:/.test(img) ? img : BASE + img;
+  // The official tour publishes three site-wide drone views and no apartment, floor, or block map. Open view 1.
   el.innerHTML = `<div class="sheet-head"><div><p class="eyebrow">${towerName(a.block)} · ${t('floor')} ${a.floor}</p><h2>${t('apartment')} № ${a.number}</h2><p class="apt-head-meta">${showsPrice(a) ? `<b class="apt-price">${priceOf(a)}</b>` : ''}<span class="status-pill"><i class="dot ${a.status}"></i>${statusLabel(a.status)}</span></p></div><div class="head-actions"><button class="x" data-copy type="button" aria-label="${t('copyLink')}"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 7a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3h-2v2a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-7a3 3 0 0 1 3-3h2V7Zm2 2v2H6a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1h-3V9Zm2-2a1 1 0 0 0-1 1v7h3a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2Z"/></svg></button><button class="x" data-close aria-label="${t('close')}">×</button></div></div>
     <div class="apt-body">
-    <div class="tabs" role="group">${ty.plan_2d ? `<button data-tab="2d" aria-pressed="${tab === '2d'}">${t('plan2d')}</button>` : ''}${ty.plan_3d ? `<button data-tab="3d" aria-pressed="${tab === '3d'}">${t('plan3d')}</button>` : ''}</div>
+    <div class="tabs" role="group">${ty.plan_2d ? `<button data-tab="2d" aria-pressed="${tab === '2d'}">${t('plan2d')}</button>` : ''}${ty.plan_3d ? `<button data-tab="3d" aria-pressed="${tab === '3d'}">${t('plan3d')}</button>` : ''}<button type="button" data-tour-view="1">${t('tourView')}</button></div>
     <div class="plan"><img src="${src}" alt="${kindLabel(ty.kind)}, ${a.area} ${m2()}" loading="lazy" referrerpolicy="no-referrer" /></div>
     <div class="facts">
       <div><small>${t('area')}</small><b>${a.area} ${m2()}</b></div>
@@ -663,10 +742,14 @@ document.addEventListener('click', (e) => {
 });
 
 // ---------- about ----------
+function tourCards() {
+  return `<h3>${t('tour')}</h3><div class="tour-cards">${[1, 2, 3].map((n) => `<button type="button" class="tour-card" data-tour-view="${n}"><img src="https://hisni.biograpi.ge/v${n}/1/f0_0.jpg" alt="" /><span class="tour-badge">360°</span><span class="tour-card-name">${t('tourScene')} ${n}</span></button>`).join('')}</div>`;
+}
 function openAbout() {
   const d = $('#about'); const L = STRINGS[getLang()];
   const renders = ['aerial-day', 'aerial-night', 'exterior-01', 'exterior-02', 'view-04', 'view-07'];
   d.innerHTML = `<div class="dlg"><div class="dlg-head"><div><p class="eyebrow">${t('brandGroup')}</p><h2>${t('aboutTitle')}</h2></div><button class="x" data-close aria-label="${t('close')}">×</button></div>
+    ${tourCards()}
     ${L.aboutBody.slice(0, 3).map((p) => `<p>${esc(p)}</p>`).join('')}
     <p>${esc(L.aboutOffer)}</p>
     <p class="note"><a href="${t('statSrcUrl')}" target="_blank" rel="noopener">* ${esc(t('statSrc'))}</a></p>
@@ -680,7 +763,10 @@ function openAbout() {
 }
 $('#about-open').addEventListener('click', openAbout);
 $('#intro-about')?.addEventListener('click', openAbout);
-document.querySelectorAll('dialog').forEach((d) => d.addEventListener('click', (e) => { if (e.target === d) d.close(); }));
+document.querySelectorAll('dialog').forEach((d) => {
+  if (d.id === 'tour') return;
+  d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+});
 
 // ---------- labels ----------
 const labelEls = [];
@@ -694,6 +780,11 @@ function renderLabels() {
       el.querySelector('.poi-min').textContent = `${poi.min} ${t('walk')}`;
       el.querySelector('button').setAttribute('aria-label', `${poi[L]}, ${poi.min} ${t('walk')}`);
     }
+    if (el.dataset.tour) {
+      const name = `${t('tourView')} ${el.dataset.tour}`;
+      el.querySelector('.tour-name').textContent = name;
+      el.querySelector('button').setAttribute('aria-label', name);
+    }
     if (tower) { el.querySelector('span').textContent = tower; el.querySelector('button').setAttribute('aria-label', towerName(tower)); }
     if (el.classList.contains('project')) el.querySelector('span').textContent = t('projectName');
   });
@@ -705,6 +796,17 @@ function makeLabels(S) {
     el.innerHTML = `<button type="button"><i class="poi-ico">${POI_ICON[p.cat] || ''}</i><span class="poi-name"></span><span class="poi-min"></span></button>`;
     el.querySelector('button').addEventListener('click', () => focusPoi(p)); root.appendChild(el); labelEls.push({ el, poi: p });
     S.addLabel(el, { x: p.x, y: 6, z: p.z }, 4, false);
+  }
+  for (const spot of S.tourAnchors || []) {
+    const el = document.createElement('div');
+    el.className = 'label tour-pin';
+    el.dataset.tour = String(spot.id);
+    el.dataset.view = String(spot.id);
+    el.style.opacity = '0';
+    el.innerHTML = `<button type="button" data-tour-view="${spot.id}"><i class="tour-dot" aria-hidden="true"></i><span class="tour-name"></span><span class="tour-short">360°</span></button>`;
+    root.appendChild(el);
+    labelEls.push({ el });
+    S.addLabel(el, { x: spot.x, y: spot.y, z: spot.z }, 30, false);
   }
   for (const b of state.doc.blocks) {
     const el = document.createElement('div'); el.className = `label tower num ${b.has_data ? 'data' : ''}`; el.innerHTML = '<button><span></span></button>';
@@ -771,6 +873,7 @@ $('#reset').addEventListener('click', onHome);
 $('#reset').addEventListener('touchend', onHome, { passive: false });
 $('#reset').addEventListener('pointerup', (e) => { if (e.pointerType === 'touch') return; onHome(e); });
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && tourOpen) { e.preventDefault(); requestCloseTour(); return; }
   if (e.target.closest('input, dialog, #render-block-menu')) return;
   if (e.key === 'Escape') { if (!$('#apt-card').hidden) closeApt(); else if (!$('#filters').hidden || !$('#place-card').hidden) { showOnly(basePanel()); syncHistory(); } else if (renderMode) { /* render view clears its own selection */ } else if (state.view === 'floor') setView('block'); else if (state.view === 'block') setView('towers', { tower: null }); else if (state.view === 'towers') setView('intro'); }
   if (renderMode) {
