@@ -405,7 +405,13 @@ export async function createRenderView(opts) {
       if (window.requestIdleCallback) requestIdleCallback(preloadNight, { timeout: 1500 });
       else setTimeout(preloadNight, 600);
     },
-    hide() { root.hidden = true; tip.hidden = true; },
+    hide() {
+      root.hidden = true;
+      tip.hidden = true;
+      // boot-render hides #labels (tower badges and place pills) for the first paint.
+      // Leaving the render must drop it or those overlays stay display:none.
+      document.documentElement.classList.remove('boot-render');
+    },
     refresh() { if (!root.hidden) { paintFilterForm(); draw(); } },
     zoomBy(f) { setZoom(viewZoom * f); },
     block() { return selected; },
