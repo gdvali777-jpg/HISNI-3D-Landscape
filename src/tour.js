@@ -1,18 +1,8 @@
-// Official Hisni drone tour: https://hisni.biograpi.ge
-// Three multires cube panoramas (v1, v2, v3). Tiles allow cross-origin use
-// (Access-Control-Allow-Origin: *). The page ships exactly these three views.
-const ORIGIN = 'https://hisni.biograpi.ge';
+// Tiles copied from gdvali777-jpg/HISNI-360 (v1, v2, v3) and saved as WebP.
+// Three multires cube panoramas. Nothing is loaded from hisni.biograpi.ge.
+const BASE = import.meta.env.BASE_URL;
 export const TOUR_VIEWS = [1, 2, 3];
-export const tourThumb = (n) => `${ORIGIN}/v${n}/1/f0_0.jpg`;
-
-const CSS = [
-  'https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css',
-  `${ORIGIN}/pannellum.css`,
-];
-const JS = [
-  'https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js',
-  `${ORIGIN}/pannellum.js`,
-];
+export const tourThumb = (n) => `${BASE}tour/thumbs/v${n}.webp`;
 
 let viewer = null;
 let lib = null;
@@ -33,18 +23,12 @@ function ensureLib() {
   if (window.pannellum) return Promise.resolve();
   if (!lib) {
     lib = (async () => {
-      let last;
-      for (let i = 0; i < JS.length; i++) {
-        try {
-          const link = document.createElement('link');
-          link.rel = 'stylesheet';
-          link.href = CSS[i];
-          document.head.appendChild(link);
-          await loadScript(JS[i]);
-          if (window.pannellum) return;
-        } catch (e) { last = e; }
-      }
-      throw last || new Error('pannellum');
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = `${BASE}tour/pannellum.css`;
+      document.head.appendChild(link);
+      await loadScript(`${BASE}tour/pannellum.js`);
+      if (!window.pannellum) throw new Error('pannellum');
     })();
   }
   return lib;
@@ -54,10 +38,10 @@ function scene(n) {
   return {
     type: 'multires',
     multiRes: {
-      basePath: `${ORIGIN}/v${n}`,
+      basePath: `${BASE}tour/v${n}`,
       path: '/%l/%s%y_%x',
       fallbackPath: '/fallback/%s',
-      extension: 'jpg',
+      extension: 'webp',
       tileResolution: 512,
       maxLevel: 4,
       cubeResolution: 3072,
