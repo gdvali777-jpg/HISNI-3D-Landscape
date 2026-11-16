@@ -26,6 +26,14 @@ The viewer reads `public/data/render-frames.json`.
 }
 ```
 
+Optional per-frame fields:
+
+- `mode: "night"` puts the frame in the night set (default is day).
+- `only: "wide" | "narrow"` limits the frame to screens of 820 px and wider, or narrower. Desktop opens on `aerial-day` (1600×900, the same size as the courtyard still); phones keep the portrait `view-07`.
+- `floorK` bends the floor slicing: positive when the camera looks up from the ground (upper floors thinner, default 0.32), negative for aerial shots (`-0.2`).
+
+Trace the **facade only**, from the roof rim down to the podium. A polygon that includes the roof or the neighbours makes the floor bands land on the wrong pixels (this was the night-view bug fixed on 16.11.2026).
+
 `blocks` polygons are in **source-image pixels**, the same coordinate system as `w` × `h`. The viewer slices each polygon into floors 6–36. A frame may omit a block that is not visible. `stop: true` marks a frame the arrows can rest on (a hero angle). `placeholder: true` shows a “placeholder” chip and should not be used for a final delivery.
 
 ## What the render studio delivers

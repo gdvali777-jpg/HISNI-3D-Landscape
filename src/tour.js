@@ -5,6 +5,7 @@ export const TOUR_VIEWS = [1, 2, 3];
 export const tourThumb = (n) => `${BASE}tour/thumbs/v${n}.webp`;
 
 let viewer = null;
+let sizeWatch = null;
 let lib = null;
 let pending = null;
 
@@ -23,11 +24,17 @@ function ensureLib() {
   if (window.pannellum) return Promise.resolve();
   if (!lib) {
     lib = (async () => {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = `${BASE}tour/pannellum.css`;
-      document.head.appendChild(link);
-      await loadScript(`${BASE}tour/pannellum.js`);
+      // Wait for the stylesheet too. Without it the viewer measures a 300×150 canvas, draws at that
+      // size, and the late CSS then stretches it over the whole screen: a blurred, smeared panorama.
+      const css = new Promise((resolve) => {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = `${BASE}tour/pannellum.css`;
+        link.onload = () => resolve();
+        link.onerror = () => resolve();
+        document.head.appendChild(link);
+      });
+      await Promise.all([css, loadScript(`${BASE}tour/pannellum.js`)]);
       if (!window.pannellum) throw new Error('pannellum');
     })();
   }
@@ -75,6 +82,15 @@ async function mountNow(container, view) {
     },
     scenes,
   });
+  // Keep the drawing buffer in step with the stage. The viewer only listens to window resize,
+  // which misses a dialog that changes size on its own (late CSS, browser UI, zoom).
+  const fit = () => { try { viewer?.resize(); } catch { /* viewer not ready */ } };
+  viewer.on('load', fit);
+  if (window.ResizeObserver) {
+    sizeWatch = new ResizeObserver(fit);
+    sizeWatch.observe(container);
+  }
+  requestAnimationFrame(fit);
 }
 export function mount(container, view) {
   const run = (pending || Promise.resolve()).then(() => mountNow(container, view));
@@ -89,6 +105,8 @@ export function load(view) {
 
 export function destroy() {
   if (!viewer) return;
+  sizeWatch?.disconnect();
+  sizeWatch = null;
   viewer.destroy();
   viewer = null;
 }
