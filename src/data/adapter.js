@@ -19,9 +19,12 @@ export const INVENTORY = {
 };
 
 // Public sales line. The number is the one published as a tel: link on biograpi.ge.
+// On desktop (mouse + hover) the call buttons open a WhatsApp chat instead of a tel: link.
 export const CONTACT = {
   phone: '0322 500 505',
   tel: 'tel:+995322500505',
+  whatsappPhone: '577 35 35 81',
+  whatsapp: 'https://wa.me/995577353581',
 };
 
 // Lead delivery. Empty on purpose: the form never posts anywhere until a URL is set.
