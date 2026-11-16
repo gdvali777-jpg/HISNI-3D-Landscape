@@ -101,7 +101,7 @@ function applyI18n() {
   if (desc) desc.setAttribute('content', t('docDesc'));
   const hintP = $('#hint p');
   if (hintP) hintP.textContent = t(matchMedia('(hover: hover) and (pointer: fine)').matches ? 'hintMouse' : 'hint');
-  document.querySelectorAll('[data-call]').forEach((a) => { a.href = CONTACT.tel; });
+  document.querySelectorAll('[data-call]').forEach(wireCall);
   $('#layers-toggle')?.setAttribute('aria-label', t('layers'));
   refreshIntroToggle();
   const srcLink = document.querySelector('#stat-src');
@@ -339,6 +339,9 @@ function applyHistoryUrl() {
       if (block) renderApi?.setBlock(block);
       else renderApi?.setBlock(null);
       blockMenu?.refresh();
+      document.documentElement.dataset.view = state.view;
+      renderCrumbs();
+      if (state.view === 'intro') { $('#explorer').hidden = true; $('#apt-card').hidden = true; }
       if (p.get('filters') === '1') { showOnly('filters'); renderFilters(); }
       else if (!$('#filters').hidden) renderFilters();
     }
@@ -723,6 +726,13 @@ function chooseBlock(id) {
   const next = id && state.doc.blocks.some((b) => b.id === id) ? id : null;
   const keep = !$('#filters').hidden;
   if (renderMode) {
+    // A floor opened earlier belongs to another block now; drop it so the crumbs and list do not go stale.
+    if (state.view !== 'intro' && next !== state.tower) {
+      state.view = 'intro'; state.tower = null; state.floor = null; state.apt = null;
+      document.documentElement.dataset.view = 'intro';
+      $('#explorer').hidden = true;
+      renderCrumbs();
+    }
     state.filters.block = next;
     renderApi?.setBlock(next);
     blockMenu?.refresh();
@@ -860,25 +870,46 @@ $('#filters').addEventListener('click', (e) => {
   if (e.target.closest('[data-close]')) { showOnly(basePanel()); syncHistory(); return; }
   const ab = e.target.closest('[data-apt]'); if (ab) { showOnly(basePanel()); selectApt(ab.dataset.apt); }
 });
+// The numbers the filter sheet prints: every match, and what its View button counts.
+function filterCounts() {
+  const f = state.filters;
+  if (!state.doc) return { total: 0, view: 0 };
+  const total = state.doc.apartments.filter((a) => matches(a)).length;
+  const rangeOn = ['areaMin', 'areaMax', 'floorMin', 'floorMax', 'priceMin', 'priceMax'].some((k) => f[k] !== '');
+  if (!f.block || f.statuses.size || rangeOn) return { total, view: total };
+  const view = state.doc.apartments.filter((a) => a.status === 'available' && a.block === f.block && (!f.kinds.size || f.kinds.has(a.type.kind))).length;
+  return { total, view };
+}
+function openFilterSheet() {
+  filterLimit = 40;
+  blockDropOpen = false;
+  showOnly('filters');
+  const sheet = $('#filters');
+  sheet.scrollTop = 0;
+  renderFilters();
+  sheet.scrollTop = 0;
+  $('#filters input')?.focus({ preventScroll: true });
+  requestAnimationFrame(() => { sheet.scrollTop = 0; });
+}
 $('#filter-open').addEventListener('click', () => {
-  if ($('#filters').hidden) {
-    filterLimit = 40;
-    blockDropOpen = false;
-    showOnly('filters');
-    const sheet = $('#filters');
-    sheet.scrollTop = 0;
-    renderFilters();
-    sheet.scrollTop = 0;
-    $('#filters input')?.focus({ preventScroll: true });
-    requestAnimationFrame(() => { sheet.scrollTop = 0; });
-  }
+  if ($('#filters').hidden) openFilterSheet();
   else showOnly(basePanel());
 });
 
 // ---------- lead form (stub) ----------
-const callLabel = (withNumber) => (withNumber ? `${t('call')} · ${CONTACT.phone}` : t('call'));
+// Desktop has nothing to place a tel: call with, so the call buttons open a WhatsApp chat there.
+// Phones and tablets keep the tel: link.
+const callViaWhatsApp = () => matchMedia('(hover: hover) and (pointer: fine)').matches;
+const callHref = () => (callViaWhatsApp() ? CONTACT.whatsapp : CONTACT.tel);
+const callAttrs = () => (callViaWhatsApp() ? `href="${CONTACT.whatsapp}" target="_blank" rel="noopener"` : `href="${CONTACT.tel}"`);
+function wireCall(a) {
+  a.href = callHref();
+  if (callViaWhatsApp()) { a.target = '_blank'; a.rel = 'noopener'; }
+  else { a.removeAttribute('target'); a.removeAttribute('rel'); }
+}
+const callLabel = (withNumber) => (withNumber ? `${t('call')} · ${callViaWhatsApp() ? CONTACT.whatsappPhone : CONTACT.phone}` : t('call'));
 function callLink(place, withNumber = false) {
-  return `<a class="call-btn" href="${CONTACT.tel}" data-call="${place}">${esc(callLabel(withNumber))}</a>`;
+  return `<a class="call-btn" ${callAttrs()} data-call="${place}">${esc(callLabel(withNumber))}</a>`;
 }
 function leadResult(sent) {
   const title = sent ? t('formSentTitle') : t('formNotSentTitle');
@@ -910,7 +941,7 @@ function openLead(id, { notify = false } = {}) {
 }
 document.addEventListener('click', (e) => {
   const a = e.target.closest('[data-call]');
-  if (a) track('call_click', { place: a.dataset.call });
+  if (a) track('call_click', { place: a.dataset.call, via: callViaWhatsApp() ? 'whatsapp' : 'tel' });
 });
 
 // ---------- about ----------
@@ -1094,6 +1125,8 @@ const PLACE_ORDER = ['metro', 'school', 'kinder', 'health', 'bus', 'shop', 'bank
 const enabledCats = new Set(['metro', 'school', 'bus']);
 let placesOpen = false;
 let placesListOpen = false;
+// Render view has no map to pin places on, so the chosen categories show as cards over the still.
+let placeCardsOn = false;
 let introHold = null;
 const placesPhone = () => matchMedia('(max-width: 500px), (max-height: 500px) and (max-width: 960px)').matches;
 function placeCats() {
@@ -1128,7 +1161,25 @@ function paintPlaces() {
   const L = getLang();
   const rows = POIS.filter((p) => enabledCats.has(p.cat));
   list.innerHTML = rows.map((p) => `<li><button type="button" data-poi="${p.id}"><i class="poi-ico">${POI_ICON[p.cat] || ''}</i><span>${esc(p[L])}</span><small>${p.min} ${esc(t('walk'))}</small></button></li>`).join('');
+  paintPlaceCards();
 }
+function paintPlaceCards() {
+  const box = $('#render-places');
+  if (!box) return;
+  const rows = POIS.filter((p) => enabledCats.has(p.cat));
+  const show = renderMode && placeCardsOn && rows.length > 0;
+  box.hidden = !show;
+  if (!show) { box.innerHTML = ''; return; }
+  const L = getLang();
+  box.setAttribute('aria-label', t('places'));
+  box.innerHTML = rows.map((p) => `<div class="place-chip ${p.cat}" role="listitem" title="${esc(p[L])}"><i class="poi-ico">${POI_ICON[p.cat] || ''}</i><span class="pc-name">${esc(p.short?.[L] || p[L])}</span><small>${p.min} ${esc(t('walk'))}</small></div>`).join('')
+    + `<button type="button" class="place-chip-x" data-places-hide aria-label="${esc(t('placesCardsHide'))}" title="${esc(t('placesCardsHide'))}">×</button>`;
+}
+$('#render-places')?.addEventListener('click', (e) => {
+  if (!e.target.closest('[data-places-hide]')) return;
+  placeCardsOn = false;
+  paintPlaceCards();
+});
 function syncPoi() {
   const hideAll = app.classList.contains('hide-labels');
   labelEls.forEach(({ el, poi }) => {
@@ -1195,6 +1246,7 @@ $('#places-btn')?.addEventListener('click', (e) => {
   e.stopPropagation();
   if (placesOpen) { closePlaces(); return; }
   placesOpen = true;
+  placeCardsOn = true;
   if (placesPhone()) {
     if (introHold == null) introHold = $('#intro').classList.contains('is-collapsed');
     placesListOpen = false;
@@ -1233,6 +1285,7 @@ $('#places-cats')?.addEventListener('click', (e) => {
   else enabledCats.add(cat);
   if (enabledCats.size) app.classList.remove('hide-labels');
   else app.classList.add('hide-labels');
+  placeCardsOn = true;
   paintPlaces();
   syncPoi();
 });
@@ -1242,7 +1295,9 @@ document.addEventListener('pointerdown', (e) => {
 });
 function renderHooks() {
   return {
-    t, lang: getLang, tel: () => CONTACT.tel, towerName, statusLabel,
+    t, lang: getLang, callAttrs, towerName, statusLabel,
+    counts: filterCounts,
+    showList: openFilterSheet,
     apartments: () => state.doc.apartments,
     blockIds: () => state.doc.blocks.map((b) => b.id),
     block: blockOf,
@@ -1281,6 +1336,7 @@ async function openRender() {
   await renderApi?.show();
   if (carry) renderApi?.setBlock(carry);
   blockMenu?.refresh();
+  paintPlaceCards();
   $('#loading').classList.add('done');
 }
 async function leaveRender() {
@@ -1291,6 +1347,7 @@ async function leaveRender() {
   document.documentElement.classList.remove('boot-render');
   renderApi?.hide();
   paintViewToggle();
+  paintPlaceCards();
   const carried = renderApi?.block() || null;
   if (carried) { state.view = 'block'; state.tower = carried; state.floor = null; state.apt = null; }
   else { state.view = 'intro'; state.tower = null; state.floor = null; state.apt = null; }
@@ -1346,13 +1403,16 @@ async function boot() {
   try { await start3D(params, ctxPromise); } catch (e) { console.warn('[hisni] 3D unavailable, falling back', e); $('#viewport').innerHTML = ''; startFallback(); }
 }
 function startFallback() {
-    app.classList.add('fallback'); $('#loading').classList.add('done');
+    app.classList.add('fallback'); app.classList.remove('scene-loading'); $('#loading').classList.add('done');
     state.view = 'block'; state.tower = 'III'; showOnly('explorer'); renderCrumbs(); renderExplorer();
     $('#explorer-body').insertAdjacentHTML('afterbegin', `<p class="placeholder">${t('webglOff')}</p><img class="fallback-plan" src="${BASE}plans/block3-typical-floor.webp" alt="${t('typeL')}" width="600" height="760"/>`);
 }
 async function start3D(params, ctxP) {
   const weak = params.get('quality') === 'low' || (params.get('quality') !== 'high' && (matchMedia('(pointer: coarse)').matches || (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4));
   $('#loading').classList.add('mini');
+  // The aerial render fills the screen while the model builds. The 3D home view opens on the same angle.
+  const poster = $('#poster-3d');
+  if (poster) { poster.style.backgroundImage = `url("${BASE}renders/aerial-day.webp")`; app.classList.add('scene-loading'); }
   const [{ createScene }, ctx] = await Promise.all([import('./scene.js'), ctxP]);
   let tip = null;
   const S = await createScene($('#viewport'), ctx, {
@@ -1382,7 +1442,7 @@ async function start3D(params, ctxP) {
   S.controls.addEventListener('change', () => { needle.style.transform = `rotate(${(S.controls.getAzimuthalAngle() * 180) / Math.PI}deg)`; });
   setLight(params.get('light') || 'day');
   requestAnimationFrame(() => {
-    $('#loading').classList.add('done'); showHint();
+    $('#loading').classList.add('done'); app.classList.remove('scene-loading'); showHint();
     if (params.get('bg') === 'real') {
       const bar = $('#bg-switch');
       if (bar) bar.hidden = false;

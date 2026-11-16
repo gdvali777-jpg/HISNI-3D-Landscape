@@ -33,15 +33,15 @@ function bandPoly(poly, y0, y1) {
   return p.length >= 3 ? p : null;
 }
 
-function floorEdges(poly, floorMin, floorMax) {
+function floorEdges(poly, floorMin, floorMax, k = 0.32) {
   const ys = poly.map((p) => p[1]);
   const yT = Math.min(...ys);
   const yB = Math.max(...ys);
   const n = floorMax - floorMin + 1;
-  const k = 0.32;
+  // k > 0: seen from the ground, upper floors look thinner. k < 0: aerial shot, upper floors look taller.
   const yAt = (i) => {
     const u = i / n;
-    const s = (Math.exp(k * u) - 1) / (Math.exp(k) - 1);
+    const s = Math.abs(k) < 1e-3 ? u : (Math.exp(k * u) - 1) / (Math.exp(k) - 1);
     return yT + (yB - yT) * s;
   };
   const bands = [];
@@ -53,10 +53,11 @@ function floorEdges(poly, floorMin, floorMax) {
   return bands;
 }
 
-function centroid(poly) {
-  let x = 0, y = 0;
-  for (const p of poly) { x += p[0]; y += p[1]; }
-  return [x / poly.length, y / poly.length];
+function bbox(poly) {
+  const xs = poly.map((p) => p[0]);
+  const ys = poly.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0 };
 }
 
 export async function createRenderView(opts) {
@@ -71,7 +72,17 @@ export async function createRenderView(opts) {
   const cfg = await (await fetch(`${BASE}data/render-frames.json`)).json();
   const allFrames = cfg.frames;
   let mode = 'day';
-  let frames = allFrames.filter((f) => (f.mode || 'day') === mode);
+  // A frame may be limited to wide or narrow screens (`only`), so desktop and phone can use different stills.
+  const narrowScreen = () => matchMedia('(max-width: 819px)').matches;
+  const pickFrames = () => {
+    const side = narrowScreen() ? 'narrow' : 'wide';
+    const list = allFrames.filter((f) => (f.mode || 'day') === mode && (!f.only || f.only === side));
+    return list.length ? list : allFrames.filter((f) => (f.mode || 'day') === mode);
+  };
+  let frames = pickFrames();
+  const QUICK_KEY = 'hisni-quick-filter';
+  let quickOpen = true;
+  try { quickOpen = sessionStorage.getItem(QUICK_KEY) !== 'closed'; } catch { quickOpen = true; }
   const fade = document.querySelector('#render-fade');
   let index = 0;
   let selected = null;
@@ -186,9 +197,34 @@ export async function createRenderView(opts) {
     }
     if (label) label.textContent = frame.label?.[opts.lang()] || '';
     if (ph) { ph.hidden = !frame.placeholder; ph.textContent = opts.t('placeholderFrame'); }
+    paintQuick();
     const form = document.querySelector('#render-filters');
-    if (form && document.activeElement && form.contains(document.activeElement)) return;
+    if (form && document.activeElement && form.contains(document.activeElement)) { paintCount(); return; }
     paintFilterForm();
+  }
+
+  // Result count for the quick filter, the same numbers the full filter sheet shows.
+  function paintCount() {
+    const form = document.querySelector('#render-filters');
+    if (!form) return;
+    const c = opts.counts();
+    const n = form.querySelector('[data-rf-n]');
+    const list = form.querySelector('[data-rf-list]');
+    if (n) n.textContent = String(c.total);
+    if (list) { list.textContent = `${opts.t('showList')} (${c.view})`; list.disabled = !c.total; }
+  }
+  function paintQuick() {
+    const form = document.querySelector('#render-filters');
+    const open = document.querySelector('#render-filters-open');
+    if (form) form.hidden = !quickOpen;
+    if (open) { open.hidden = quickOpen; open.textContent = opts.t('quickFilter'); }
+  }
+  function setQuick(on) {
+    quickOpen = !!on;
+    try { sessionStorage.setItem(QUICK_KEY, quickOpen ? 'open' : 'closed'); } catch { /* private mode */ }
+    paintQuick();
+    if (quickOpen) { paintFilterForm(); document.querySelector('#render-filters input')?.focus({ preventScroll: true }); }
+    else document.querySelector('#render-filters-open')?.focus({ preventScroll: true });
   }
 
   function paintFilterForm() {
@@ -198,12 +234,16 @@ export async function createRenderView(opts) {
     const kinds = ['studio', '1br', '2br'];
     const sts = ['available', 'reserved', 'queue', 'sold', 'nfs'];
     form.innerHTML = `
+      <div class="rf-head"><strong>${opts.t('quickFilter')}</strong><button type="button" class="x" data-rf-close aria-label="${opts.t('close')}" title="${opts.t('close')}">×</button></div>
       <fieldset><legend>${opts.t('rooms')}</legend><div class="seg">${kinds.map((k) => `<label><input type="checkbox" name="kind" value="${k}" ${f.kinds.has(k) ? 'checked' : ''}/><span>${opts.t(k)}</span></label>`).join('')}</div></fieldset>
       <fieldset><legend>${opts.t('status')}</legend><div class="seg">${sts.map((k) => `<label><input type="checkbox" name="status" value="${k}" ${f.statuses.has(k) ? 'checked' : ''}/><span>${opts.statusLabel(k)}</span></label>`).join('')}</div></fieldset>
       <fieldset><legend>${opts.t('floorRange')}</legend><div class="range"><input name="floorMin" inputmode="numeric" placeholder="6" value="${f.floorMin}" aria-label="${opts.t('floorRange')} min"/><input name="floorMax" inputmode="numeric" placeholder="36" value="${f.floorMax}" aria-label="${opts.t('floorRange')} max"/></div></fieldset>
       <fieldset><legend>${opts.t('areaRange')}</legend><div class="range"><input name="areaMin" inputmode="decimal" placeholder="${opts.t('min')}" value="${f.areaMin}" aria-label="${opts.t('areaRange')} min"/><input name="areaMax" inputmode="decimal" placeholder="${opts.t('max')}" value="${f.areaMax}" aria-label="${opts.t('areaRange')} max"/></div></fieldset>
+      <p class="rf-count" role="status"><b data-rf-n></b> ${opts.t('results')}</p>
+      <button type="button" class="primary" data-rf-list></button>
       <button type="button" class="btn-ghost" data-reset>${opts.t('reset')}</button>
-      <a class="call-btn" href="${opts.tel()}" data-call="render">${opts.t('call')}</a>`;
+      <a class="call-btn" ${opts.callAttrs()} data-call="render">${opts.t('call')}</a>`;
+    paintCount();
   }
 
   function draw() {
@@ -216,7 +256,7 @@ export async function createRenderView(opts) {
       if (!poly) continue;
       const active = selected === id;
       if (active && opts.block(id)?.has_data) {
-        for (const band of floorEdges(poly, cfg.floorMin, cfg.floorMax)) {
+        for (const band of floorEdges(poly, cfg.floorMin, cfg.floorMax, frame.floorK ?? 0.32)) {
           parts.push(`<polygon class="floor-band" data-block="${id}" data-floor="${band.floor}" points="${pts(band.poly)}" fill="${bandFill(id, band.floor)}" tabindex="0" role="button" aria-label="${opts.towerName(id)} ${opts.t('floor')} ${band.floor}"/>`);
         }
       } else {
@@ -250,16 +290,27 @@ export async function createRenderView(opts) {
     if (!id) selected = null;
     else if (toggle && selected === id) selected = null;
     else selected = id;
-    if (selected) {
-      const c = centroid(frames[index].blocks[selected]);
-      zoom = { x: c[0], y: c[1], scale: 1.75 };
-    } else zoom = null;
+    if (selected) zoom = zoomFor(frames[index].blocks[selected]);
+    else zoom = null;
     animLayout = true;
     draw();
     animLayout = false;
     if (notify) opts.onBlock?.(selected);
     // Filter and header picks apply the block even when it has no inventory. The polygon tap still explains that.
     if (soon && selected && !opts.block(selected)?.has_data) opts.onSoon(selected);
+  }
+
+  // Zoom on a block so its whole facade stays inside the screen. A fixed 1.75 cropped tall towers on wide stills.
+  function zoomFor(poly) {
+    const frame = frames[index];
+    const b = bbox(poly);
+    const box = root.getBoundingClientRect();
+    let scale = 1.75;
+    if (box.width && box.height && b.w && b.h) {
+      const base = Math.min(box.width / frame.w, box.height / frame.h);
+      scale = Math.max(1, Math.min(1.75, (box.height * 0.78) / (b.h * base), (box.width * 0.5) / (b.w * base)));
+    }
+    return { x: b.cx, y: b.cy, scale };
   }
 
   function hoverTip(el, ev) {
@@ -301,9 +352,10 @@ export async function createRenderView(opts) {
   const pointers = new Map();
   let dragX = 0; let dragY = 0; let dragAt = 0; let dragged = false; let pinchDist = 0; let suppressClick = false;
   stage.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('.render-panel, .render-spin, .tools, a, input, button')) return;
+    if (e.target.closest('.render-panel, .render-spin, .render-places, .tools, a, input, button')) return;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    stage.setPointerCapture?.(e.pointerId);
+    // No pointer capture on press: Chromium sends the click to the capturing element,
+    // so a captured press never reached the tower and floor polygons. Capture once a drag starts.
     dragX = e.clientX;
     dragY = e.clientY;
     dragAt = index;
@@ -327,7 +379,7 @@ export async function createRenderView(opts) {
     }
     const dx = e.clientX - dragX;
     const dy = e.clientY - dragY;
-    if (Math.hypot(dx, dy) > 12) dragged = true;
+    if (!dragged && Math.hypot(dx, dy) > 12) { dragged = true; try { stage.setPointerCapture?.(e.pointerId); } catch { /* pointer already gone */ } }
     if (viewZoom > 1) {
       panX += e.clientX - prev.x;
       panY += e.clientY - prev.y;
@@ -347,6 +399,9 @@ export async function createRenderView(opts) {
   }
   stage.addEventListener('pointerup', endDrag);
   stage.addEventListener('pointercancel', endDrag);
+  // An uncaptured press can be released outside the stage; forget it there too.
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', endDrag);
 
   root.addEventListener('click', (e) => {
     const prev = e.target.closest('[data-spin="-1"]');
@@ -354,7 +409,10 @@ export async function createRenderView(opts) {
     if (prev || next) { showFrame(index + (prev ? -1 : 1)); return; }
     const dot = e.target.closest('[data-frame]');
     if (dot) { selected = null; zoom = null; opts.onBlock?.(null); showFrame(+dot.dataset.frame); return; }
-    if (e.target.closest('[data-reset]')) { opts.resetFilters(); paintFilterForm(); draw(); }
+    if (e.target.closest('[data-reset]')) { opts.resetFilters(); paintFilterForm(); draw(); return; }
+    if (e.target.closest('[data-rf-close]')) { setQuick(false); return; }
+    if (e.target.closest('#render-filters-open')) { setQuick(true); return; }
+    if (e.target.closest('[data-rf-list]')) opts.showList();
   });
   root.addEventListener('input', (e) => {
     if (!e.target.closest('#render-filters')) return;
@@ -370,7 +428,7 @@ export async function createRenderView(opts) {
     const next = day ? 'day' : 'night';
     if (next === mode) return;
     mode = next;
-    frames = allFrames.filter((f) => (f.mode || 'day') === mode);
+    frames = pickFrames();
     index = 0;
     selected = null;
     zoom = null;

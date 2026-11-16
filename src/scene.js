@@ -196,7 +196,14 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(38, container.clientWidth / container.clientHeight, 2, 4000);
-  { const k = container.clientWidth / container.clientHeight < 0.8 ? 1.75 : 1; camera.position.set(-330 * k, 260 * k, 420 * k); }
+  // Home camera. Wide screens open on the angle of the aerial render (renders/aerial-day.webp):
+  // Block I front left, IV on the right. Portrait phones keep the earlier south-west view.
+  const HOME_WIDE = { pos: [261, 410, -338], look: [0, 45, 10] };
+  const homeView = () => {
+    if (camera.aspect < 0.8) { const k = 1.75; return { pos: [-330 * k, 260 * k, 420 * k], look: [0, 45, 10] }; }
+    return HOME_WIDE;
+  };
+  camera.position.set(...homeView().pos);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.target.set(0, 45, 10); controls.enableDamping = true; controls.dampingFactor = 0.08;
   controls.minDistance = 40; controls.maxDistance = 1100; controls.maxPolarAngle = Math.PI * 0.47; controls.minPolarAngle = 0.05;
@@ -1350,9 +1357,12 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
         flyTo(new THREE.Vector3(...realView.pos), new THREE.Vector3(...realView.look));
         armAfterFly = true;
       }
-      else { const k = camera.aspect < 0.8 ? 1.75 : 1; flyTo(new THREE.Vector3(-330 * k, 260 * k, 420 * k), new THREE.Vector3(0, 45, 10)); }
+      else { const h = homeView(); flyTo(new THREE.Vector3(...h.pos), new THREE.Vector3(...h.look)); }
     },
-    towers: () => { const k = camera.aspect < 0.8 ? 1.6 : 1; flyTo(new THREE.Vector3(-150 * k, 210 * k, 260 * k), new THREE.Vector3(10, 60, 10)); },
+    towers: () => {
+      if (camera.aspect < 0.8) { const k = 1.6; flyTo(new THREE.Vector3(-150 * k, 210 * k, 260 * k), new THREE.Vector3(10, 60, 10)); }
+      else flyTo(new THREE.Vector3(188, 210, -228), new THREE.Vector3(10, 60, 10));
+    },
     neighborhood: () => flyTo(new THREE.Vector3(-520, 620, 700), new THREE.Vector3(30, 0, 0)),
     map: () => flyTo(new THREE.Vector3(0.1, 980, 1), new THREE.Vector3(0, 0, 0)),
   };
