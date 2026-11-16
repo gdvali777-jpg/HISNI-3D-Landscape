@@ -46,7 +46,7 @@
       var narrow = matchMedia('(max-width: 819px)').matches;
       var l = document.createElement('link');
       l.rel = 'preload'; l.as = 'image'; l.fetchPriority = 'high';
-      l.href = narrow ? './renders/view-07-720.webp' : './renders/view-07.webp';
+      l.href = narrow ? './renders/view-07-720.webp' : './renders/aerial-day.webp';
       document.head.appendChild(l);
     })();
   </script>
@@ -65,8 +65,10 @@
     <p id="render-ph" class="render-ph" hidden>Placeholder</p>
     <div id="render-tip" class="render-tip" hidden></div>
     <div class="render-panel">
+      <button type="button" id="render-filters-open" class="render-filters-open" hidden></button>
       <form id="render-filters" class="render-filters"></form>
     </div>
+    <div id="render-places" class="render-places" role="list" hidden></div>
     <div class="day-night" role="group" id="day-night">
       <button type="button" id="day-mode" aria-pressed="true">დღე</button>
       <button type="button" id="night-mode" aria-pressed="false">ღამე</button>
@@ -85,7 +87,8 @@
       var img = document.getElementById('render-img');
       view.hidden = false;
       var narrow = matchMedia('(max-width: 819px)').matches;
-      img.src = narrow ? './renders/view-07-720.webp' : './renders/view-07.webp';
+      img.src = narrow ? './renders/view-07-720.webp' : './renders/aerial-day.webp';
+      if (!narrow) { img.width = 1600; img.height = 900; }
       img.alt = 'Hisni';
       view.style.background = 'url("' + img.src + '") center / contain no-repeat #9a887c';
       var blur = document.getElementById('render-blur');
@@ -95,6 +98,7 @@
       document.getElementById('app').classList.add('render-armed');
     }
   </script>
+  <div id="poster-3d" class="poster-3d" aria-hidden="true"></div>
   <div id="labels"></div>
 
   <div id="block-picker" class="block-picker">

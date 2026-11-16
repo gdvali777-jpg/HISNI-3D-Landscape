@@ -63,6 +63,8 @@ After a successful run the site is at [https://gdvali777-jpg.github.io/HISNI-3D-
 
 The CTA form calls `submitLead()`, which is a stub that sends nothing.
 
+Call buttons use `CONTACT` in `src/data/adapter.js`: a `tel:` link on phones and tablets, a WhatsApp chat (`CONTACT.whatsapp`) on desktop.
+
 ## Fonts
 
 Corporate fonts **Effra** (English) and **PingL** (Georgian) are subset to WOFF2 in `public/fonts/`. **These require a web-embedding license check before any public production use.** Until that license is confirmed, treat this GitHub Pages site as an internal preview, not a public production launch.
