@@ -72,10 +72,18 @@ export async function createRenderView(opts) {
   const cfg = await (await fetch(`${BASE}data/render-frames.json`)).json();
   const allFrames = cfg.frames;
   let mode = 'day';
-  // Phone and desktop share the desktop stills. `only: "narrow"` was a separate phone photograph.
+  // Same breakpoint as the landing still: phones in portrait, and short landscape phones wider than 819px.
+  const narrowScreen = () => matchMedia('(max-width: 819px), (max-height: 520px) and (max-width: 1024px)').matches;
+  // Desktop keeps the aerial and the courtyard. Phones drop the courtyard (ეზო / view-04) and the old phone-only still.
   const pickFrames = () => {
-    const list = allFrames.filter((f) => (f.mode || 'day') === mode && f.only !== 'narrow');
-    return list.length ? list : allFrames.filter((f) => (f.mode || 'day') === mode);
+    const narrow = narrowScreen();
+    const list = allFrames.filter((f) => {
+      if ((f.mode || 'day') !== mode) return false;
+      if (f.only === 'narrow') return false;
+      if (narrow && f.id === 'view-04') return false;
+      return true;
+    });
+    return list.length ? list : allFrames.filter((f) => (f.mode || 'day') === mode && f.id !== 'view-04');
   };
   let frames = pickFrames();
   const QUICK_KEY = 'hisni-quick-filter';
@@ -189,8 +197,13 @@ export async function createRenderView(opts) {
     const ph = document.querySelector('#render-ph');
     const frame = frames[index];
     paintModes();
+    const spin = document.querySelector('.render-spin');
+    const single = narrowScreen() && frames.length < 2;
+    spin?.classList.toggle('is-single', single);
+    spin?.querySelectorAll('[data-spin]').forEach((b) => { b.hidden = single; });
     if (dots) {
-      dots.innerHTML = frames.map((f, i) => `<button type="button" data-frame="${i}" class="${i === index ? 'is-on' : ''} ${f.stop ? 'is-stop' : ''}" aria-label="${f.label?.[opts.lang()] || f.id}" aria-current="${i === index ? 'true' : 'false'}"></button>`).join('');
+      dots.hidden = single;
+      if (!single) dots.innerHTML = frames.map((f, i) => `<button type="button" data-frame="${i}" class="${i === index ? 'is-on' : ''} ${f.stop ? 'is-stop' : ''}" aria-label="${f.label?.[opts.lang()] || f.id}" aria-current="${i === index ? 'true' : 'false'}"></button>`).join('');
     }
     if (label) label.textContent = frame.label?.[opts.lang()] || '';
     if (ph) { ph.hidden = !frame.placeholder; ph.textContent = opts.t('placeholderFrame'); }
@@ -383,6 +396,7 @@ export async function createRenderView(opts) {
       layout();
       return;
     }
+    if (frames.length < 2) return;
     const step = Math.round(-dx / 90);
     const next = dragAt + step;
     if (next !== index) showFrame(next, { immediate: true });
@@ -403,7 +417,7 @@ export async function createRenderView(opts) {
   root.addEventListener('click', (e) => {
     const prev = e.target.closest('[data-spin="-1"]');
     const next = e.target.closest('[data-spin="1"]');
-    if (prev || next) { showFrame(index + (prev ? -1 : 1)); return; }
+    if (prev || next) { if (frames.length > 1) showFrame(index + (prev ? -1 : 1)); return; }
     const dot = e.target.closest('[data-frame]');
     if (dot) { selected = null; zoom = null; opts.onBlock?.(null); showFrame(+dot.dataset.frame); return; }
     if (e.target.closest('[data-reset]')) { opts.resetFilters(); paintFilterForm(); draw(); return; }
@@ -441,11 +455,22 @@ export async function createRenderView(opts) {
     if (root.hidden) return;
     if (e.target.matches('input, textarea')) return;
     if (e.target.closest('#block-menu, #places-panel, #block-picker')) return;
-    if (e.key === 'ArrowLeft') { e.preventDefault(); showFrame(index - 1); }
-    if (e.key === 'ArrowRight') { e.preventDefault(); showFrame(index + 1); }
+    if (frames.length > 1 && e.key === 'ArrowLeft') { e.preventDefault(); showFrame(index - 1); }
+    if (frames.length > 1 && e.key === 'ArrowRight') { e.preventDefault(); showFrame(index + 1); }
     if (e.key === 'Escape' && selected) { selected = null; zoom = null; opts.onBlock?.(null); draw(); }
   });
-  new ResizeObserver(() => { if (!root.hidden) layout(); }).observe(root);
+  const applyScreenFrames = () => {
+    if (root.hidden) return;
+    const id = frames[index]?.id;
+    const nextList = pickFrames();
+    const same = nextList.length === frames.length && nextList.every((f, i) => f.id === frames[i]?.id);
+    if (same) { layout(); return; }
+    frames = nextList;
+    const next = frames.findIndex((f) => f.id === id);
+    showFrame(next >= 0 ? next : 0, { immediate: true });
+  };
+  new ResizeObserver(() => { if (!root.hidden) applyScreenFrames(); }).observe(root);
+  matchMedia('(max-width: 819px), (max-height: 520px) and (max-width: 1024px)').addEventListener?.('change', applyScreenFrames);
 
   return {
     frames: frames.length,

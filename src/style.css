@@ -285,6 +285,8 @@ html.boot-render #loading { display: none !important; }
 .render-dots button.is-on { background: var(--cream); }
 .render-dots button.is-stop { box-shadow: 0 0 0 1px rgba(239, 235, 212, .7); }
 .render-frame-label { font-size: 12px; padding-right: 8px; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.render-spin.is-single { padding-inline: 14px; }
+.render-spin.is-single .render-frame-label { padding: 0 4px; }
 #app.is-render #intro, #app.is-render .layers, #app.is-render .map-meta, #app.is-render footer, #app.is-render #labels, #app.is-render #hint, #app.is-render #bg-switch, #app.is-render #rotate { display: none !important; }
 #app.is-render .tools { bottom: calc(78px + env(safe-area-inset-bottom)); z-index: 7; }
 @media (max-width: 819px) {
