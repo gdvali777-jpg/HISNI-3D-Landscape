@@ -140,22 +140,53 @@ export async function createRenderView(opts) {
     img.src = src;
     if (blur) blur.src = src;
   }
+  function towerFocus(frame) {
+    const polys = Object.values(frame.blocks || {}).filter((p) => p && p.length);
+    if (!polys.length) return frame.focal || [0.5, 0.45];
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const poly of polys) for (const [x, y] of poly) {
+      x0 = Math.min(x0, x); y0 = Math.min(y0, y);
+      x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+    }
+    return [(x0 + x1) / 2 / frame.w, (y0 + y1) / 2 / frame.h];
+  }
+  function frameBase(frame, box) {
+    const contain = Math.min(box.width / frame.w, box.height / frame.h);
+    if (!narrowScreen()) return contain;
+    const cover = Math.max(box.width / frame.w, box.height / frame.h);
+    const polys = Object.values(frame.blocks || {}).filter((p) => p && p.length);
+    let span = frame.w;
+    if (polys.length) {
+      let x0 = Infinity, x1 = -Infinity;
+      for (const poly of polys) for (const [x] of poly) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
+      span = Math.max(1, (x1 - x0) * 1.04);
+    }
+    // Full-height cover would hide the outer towers. Stop at the scale that still shows all four, and never smaller than the screen width.
+    return Math.min(cover, Math.max(box.width / span, box.width / frame.w));
+  }
   function layout() {
     const frame = frames[index];
     const box = root.getBoundingClientRect();
     if (!box.width || !box.height) return;
     stage.classList.toggle('is-anim', animLayout);
-    // Contain-fit at zoom 1 so every tower is inside the screen. +/− and a selected block scale up from there.
-    const fit = Math.min(box.width / frame.w, box.height / frame.h) * viewZoom * (zoom?.scale || 1);
+    const phone = narrowScreen();
+    const base = frameBase(frame, box);
+    const fit = base * viewZoom * (zoom?.scale || 1);
     const w = frame.w * fit;
     const h = frame.h * fit;
-    const [fx, fy] = zoom ? [zoom.x / frame.w, zoom.y / frame.h] : (frame.focal || [0.5, 0.42]);
+    const aim = zoom ? [zoom.x / frame.w, zoom.y / frame.h] : (phone ? towerFocus(frame) : (frame.focal || [0.5, 0.42]));
+    const [fx, fy] = aim;
+    const anchorY = phone ? 0.5 : (zoom ? 0.46 : 0.42);
     let left = box.width * 0.5 - fx * w + panX;
-    let top = box.height * (zoom ? 0.46 : 0.42) - fy * h + panY;
+    let top = box.height * anchorY - fy * h + panY;
     if (w >= box.width) left = Math.min(0, Math.max(box.width - w, left));
     else left = (box.width - w) / 2;
     if (h >= box.height) top = Math.min(0, Math.max(box.height - h, top));
     else top = (box.height - h) / 2;
+    if (phone) {
+      panX = left - (box.width * 0.5 - fx * w);
+      panY = top - (box.height * anchorY - fy * h);
+    }
     stage.classList.add('fitted');
     stage.style.width = `${w}px`;
     stage.style.height = `${h}px`;
@@ -317,7 +348,7 @@ export async function createRenderView(opts) {
     const box = root.getBoundingClientRect();
     let scale = 1.75;
     if (box.width && box.height && b.w && b.h) {
-      const base = Math.min(box.width / frame.w, box.height / frame.h);
+      const base = frameBase(frame, box);
       scale = Math.max(1, Math.min(1.75, (box.height * 0.78) / (b.h * base), (box.width * 0.5) / (b.w * base)));
     }
     return { x: b.cx, y: b.cy, scale };
@@ -390,9 +421,11 @@ export async function createRenderView(opts) {
     const dx = e.clientX - dragX;
     const dy = e.clientY - dragY;
     if (!dragged && Math.hypot(dx, dy) > 12) { dragged = true; try { stage.setPointerCapture?.(e.pointerId); } catch { /* pointer already gone */ } }
-    if (viewZoom > 1) {
+    if (!dragged) return;
+    // A sideways drag on a phone moves the covered picture. A tap still reaches the tower polygons.
+    if (viewZoom > 1 || narrowScreen()) {
       panX += e.clientX - prev.x;
-      panY += e.clientY - prev.y;
+      if (viewZoom > 1) panY += e.clientY - prev.y;
       layout();
       return;
     }
