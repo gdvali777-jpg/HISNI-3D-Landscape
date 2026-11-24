@@ -43,10 +43,9 @@
         return;
       }
       document.documentElement.classList.add('boot-render');
-      var narrow = matchMedia('(max-width: 819px)').matches;
       var l = document.createElement('link');
       l.rel = 'preload'; l.as = 'image'; l.fetchPriority = 'high';
-      l.href = narrow ? './renders/view-07-720.webp' : './renders/aerial-day.webp';
+      l.href = './renders/aerial-day.webp';
       document.head.appendChild(l);
     })();
   </script>
@@ -55,10 +54,10 @@
 <main id="app">
   <div id="viewport" role="region" tabindex="0" aria-label="3D ხედი. გადაათრიე დასატრიალებლად, ორი თითით ან სქროლით — მასშტაბი."></div>
   <div id="render-view" hidden>
-    <img id="render-blur" class="render-blur" alt="" aria-hidden="true" width="1243" height="1600" />
+      <img id="render-blur" class="render-blur" alt="" aria-hidden="true" width="1600" height="900" />
     <div id="render-stage">
-      <img id="render-img" alt="" width="1243" height="1600" fetchpriority="high" />
-      <img id="render-fade" alt="" aria-hidden="true" width="1243" height="1600" />
+      <img id="render-img" alt="" width="1600" height="900" fetchpriority="high" />
+      <img id="render-fade" alt="" aria-hidden="true" width="1600" height="900" />
       <svg id="render-svg" aria-hidden="false"></svg>
     </div>
     <div class="render-vignette" aria-hidden="true"></div>
@@ -86,9 +85,9 @@
       var view = document.getElementById('render-view');
       var img = document.getElementById('render-img');
       view.hidden = false;
-      var narrow = matchMedia('(max-width: 819px)').matches;
-      img.src = narrow ? './renders/view-07-720.webp' : './renders/aerial-day.webp';
-      if (!narrow) { img.width = 1600; img.height = 900; }
+      img.src = './renders/aerial-day.webp';
+      img.width = 1600;
+      img.height = 900;
       img.alt = 'Hisni';
       view.style.background = 'url("' + img.src + '") center / contain no-repeat #9a887c';
       var blur = document.getElementById('render-blur');
