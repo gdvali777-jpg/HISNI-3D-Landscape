@@ -72,11 +72,9 @@ export async function createRenderView(opts) {
   const cfg = await (await fetch(`${BASE}data/render-frames.json`)).json();
   const allFrames = cfg.frames;
   let mode = 'day';
-  // A frame may be limited to wide or narrow screens (`only`), so desktop and phone can use different stills.
-  const narrowScreen = () => matchMedia('(max-width: 819px)').matches;
+  // Phone and desktop share the desktop stills. `only: "narrow"` was a separate phone photograph.
   const pickFrames = () => {
-    const side = narrowScreen() ? 'narrow' : 'wide';
-    const list = allFrames.filter((f) => (f.mode || 'day') === mode && (!f.only || f.only === side));
+    const list = allFrames.filter((f) => (f.mode || 'day') === mode && f.only !== 'narrow');
     return list.length ? list : allFrames.filter((f) => (f.mode || 'day') === mode);
   };
   let frames = pickFrames();
@@ -95,8 +93,7 @@ export async function createRenderView(opts) {
   const cache = new Map();
 
   function hiRes(frame) {
-    const narrow = matchMedia('(max-width: 819px)').matches;
-    return `${BASE}${narrow && frame.small ? frame.small : frame.src}`;
+    return `${BASE}${frame.src}`;
   }
   function preload(url) {
     if (cache.has(url)) return cache.get(url);

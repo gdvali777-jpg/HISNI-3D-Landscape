@@ -2,7 +2,7 @@
   "version": 2,
   "floorMin": 6,
   "floorMax": 36,
-  "note": "Stop-frames only. Intermediate turntable frames are not invented from the schematic model; see docs/RENDER-FRAMES.md. Block polygons are hand traces in image pixels (facade only, roof excluded). Floor bands are sliced from each block polygon by the viewer. `only` limits a frame to wide (>=820px) or narrow screens.",
+  "note": "Stop-frames only. Intermediate turntable frames are not invented from the schematic model; see docs/RENDER-FRAMES.md. Block polygons are hand traces in image pixels (facade only, roof excluded). Floor bands are sliced from each block polygon by the viewer. The landing uses the same still on every screen; frames marked only:narrow are not shown.",
   "frames": [
     {
       "id": "aerial-day",
