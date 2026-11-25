@@ -457,7 +457,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
     });
     return out;
   }
-  const LABEL_AVOID = '#intro, #explorer, .sheet, .layers, .tools, .place-card, .crumbs, .header, .map-meta, footer, #hint, #toast, #bg-switch, #block-picker, #places-panel, .day-night, #view-toggle';
+  const LABEL_AVOID = '#intro, #explorer, .sheet, .layers, .tools, .place-card, .crumbs, .header, .map-meta, footer, #hint, #toast, #bg-switch, #block-picker, #places-panel, .day-night, #view-toggle, #back-list';
   const hit = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
   function updateLabels(precise) {
     const w = container.clientWidth, h = container.clientHeight;
@@ -1272,7 +1272,7 @@ export async function createScene(container, ctx, { weak = false, onPick, onHove
           live.push({ l: r.left - cr.left, t: r.top - cr.top, r: r.right - cr.left, b: r.bottom - cr.top });
         }
         const avoid = [];
-        for (const el of document.querySelectorAll('#intro, #explorer, .sheet, .layers, .tools, .header, #hint, #block-picker, #places-panel, .crumbs, #view-toggle')) {
+        for (const el of document.querySelectorAll('#intro, #explorer, .sheet, .layers, .tools, .header, #hint, #block-picker, #places-panel, .crumbs, #view-toggle, #back-list')) {
           if (el.hidden) continue;
           const r = el.getBoundingClientRect();
           if (r.width < 2 || r.height < 2) continue;

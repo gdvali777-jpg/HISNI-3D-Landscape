@@ -14,6 +14,7 @@ export const STRINGS = {
     day: 'დღე', golden: 'მზის ჩასვლა', night: 'ღამე',
     lBuildings: 'მიმდებარე შენობები', lTrees: 'ხეები და გამწვანება', lLabels: 'ადგილები',
     neighborhood: 'უბანი', towers: 'თაუერები', block: 'ბლოკი', blocks: 'ბლოკები', blockChosen: 'ბლოკები, არჩეულია {id}', allBlocks: 'ყველა ბლოკი', floor: 'სართული', apartment: 'ბინა',
+    backList: '← ბინების სია', backListHref: 'https://biograpi.ge/ka/hi1/apartments?view=grid',
     chooseTower: 'აირჩიე თაუერი', chooseTowerHint: 'შეეხე თაუერს ან აირჩიე სიიდან.',
     chooseFloor: 'აირჩიე სართული', residentialFloors: 'საცხოვრებელი სართულები 6–36',
     noData: 'ამ ბლოკის ბინების მონაცემები ჯერ არ არის ატვირთული.',
@@ -99,6 +100,7 @@ export const STRINGS = {
     day: 'Day', golden: 'Golden hour', night: 'Night',
     lBuildings: 'Surrounding buildings', lTrees: 'Trees & landscape', lLabels: 'Places',
     neighborhood: 'Neighborhood', towers: 'Towers', block: 'Block', blocks: 'Blocks', blockChosen: 'Blocks, {id} selected', allBlocks: 'All blocks', floor: 'Floor', apartment: 'Apartment',
+    backList: '← Apartments list', backListHref: 'https://biograpi.ge/en/hi1/apartments?view=grid',
     chooseTower: 'Choose a tower', chooseTowerHint: 'Tap a tower or pick one from the list.',
     chooseFloor: 'Choose a floor', residentialFloors: 'Residential floors 6–36',
     noData: 'Apartment data for this block has not been uploaded yet.',
@@ -171,8 +173,11 @@ export const STRINGS = {
     dirs: { N: 'North', NE: 'North-east', E: 'East', SE: 'South-east', S: 'South', SW: 'South-west', W: 'West', NW: 'North-west' },
     poiCat: { metro: 'Metro', school: 'School', bus: 'Bus stop', health: 'Clinic', bank: 'Bank', shop: 'Supermarket', pharmacy: 'Pharmacy', kinder: 'Kindergarten' },
   },
+  ru: {
+    backList: '← Список квартир', backListHref: 'https://biograpi.ge/ru/hi1/apartments?view=grid',
+  },
 };
-let lang = typeof window === 'undefined' ? 'ka' : ((new URLSearchParams(location.search).get('lang') || localStorage.getItem('hisni-lang') || 'ka') === 'en' ? 'en' : 'ka');
+let lang = typeof window === 'undefined' ? 'ka' : (['en', 'ru'].includes(new URLSearchParams(location.search).get('lang') || localStorage.getItem('hisni-lang')) ? (new URLSearchParams(location.search).get('lang') || localStorage.getItem('hisni-lang')) : 'ka');
 export const getLang = () => lang;
 export const setLang = (l) => { lang = l; localStorage.setItem('hisni-lang', l); document.documentElement.lang = l; };
 export const t = (k) => {
