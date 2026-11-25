@@ -951,6 +951,15 @@ function mountBitrixForm(slot) {
   s.src = `https://crm.biograpi.ge/upload/crm/form/loader_6_k7hgdm.js?${Date.now() / 180000 | 0}`;
   slot.appendChild(s);
 }
+// The agreement window is appended to body. A modal <dialog> paints in the top layer,
+// above any z-index, so the window has to live inside #lead while that dialog is open.
+function liftBitrixWindow() {
+  const lead = document.querySelector('#lead');
+  if (!lead?.open) return;
+  const mount = document.querySelector('body > .b24-window-mounts');
+  if (mount) lead.appendChild(mount);
+}
+new MutationObserver(liftBitrixWindow).observe(document.body, { childList: true });
 // Desktop has nothing to place a tel: call with, so the call buttons open a WhatsApp chat there.
 // Phones and tablets keep the tel: link.
 const callViaWhatsApp = () => matchMedia('(hover: hover) and (pointer: fine)').matches;
