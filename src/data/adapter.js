@@ -2,8 +2,9 @@
  * Inventory data layer.
  *
  * Static apartment geometry/plan data lives in /data/apartments.json (generated from the
- * project's floor-plan PDFs) plus snapshots: Blocks I/II from biograpi.ge, Block III from a read-only
- * Bitrix24 catalog export (14.11.2026; list prices, NFS prices withheld, no CRM deal ids shipped).
+ * project's floor-plan PDFs). Status and price for Blocks I, II and III come from a read-only
+ * Bitrix catalog export (25.11.2026; available list prices only; sold, reserved, NFS and queue
+ * prices omitted; no CRM deal ids shipped). Block IV has not been uploaded.
  *
  * Later, live status/price will come READ-ONLY from Bitrix24 CRM (crm.biograpi.ge).
  * Do NOT call Bitrix from the browser and never ship a webhook/token to the client.
@@ -71,7 +72,7 @@ export async function applyLive(doc, url) {
 }
 
 // Lead stub. Never sends a deal id, and does not call any endpoint while LEAD.url is empty.
-// Sold, reserved, and not-for-sale prices are not shown and are omitted from the client file.
+// Sold, reserved, not-for-sale and queue prices are not shown and are omitted from the client file.
 export async function submitLead(payload) {
   const body = {
     apartment_id: payload.apartment_id || '',
