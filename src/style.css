@@ -457,7 +457,7 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
 #lead { width: min(520px, 94vw); }
 #lead .dlg.lead { display: flex; flex-direction: column; max-height: min(88dvh, 880px); overflow: hidden; padding: 16px; }
 #lead .b24-slot { position: relative; flex: 1 1 auto; min-height: 160px; max-height: min(68dvh, 680px); overflow: auto; }
-#lead .lead-sending { position: absolute; left: 12px; right: 12px; top: 62%; z-index: 4; margin: 0; text-align: center; font-weight: 700; color: var(--navy); pointer-events: none; }
+#lead .lead-sending { position: absolute; left: 16px; right: 16px; top: calc(50% + 104px); z-index: 20; margin: 0; text-align: center; font-weight: 700; font-size: 16px; line-height: 1.35; color: var(--navy); pointer-events: none; }
 #lead .b24-slot .b24-form { max-width: 100%; }
 #lead .lead-fallback { flex: none; display: flex; padding-top: 8px; }
 #lead .lead-fallback .call-btn { min-height: 44px; }
