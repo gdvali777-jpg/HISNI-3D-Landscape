@@ -1,6 +1,6 @@
 import './style.css';
 import { t, getLang, setLang, STRINGS } from './i18n.js';
-import { loadApartments, submitLead, CONTACT } from './data/adapter.js';
+import { loadApartments, CONTACT } from './data/adapter.js';
 import { track } from './analytics.js';
 import { mountBlockMenu } from './block-menu.js';
 
@@ -273,6 +273,10 @@ function urlForState() {
     || p.get('apt') || p.get('tower') || p.get('floor') || p.get('filters') === '1'
     || p.get('bg') === 'real' || p.get('webgl') === '0' || p.get('quality') || p.get('light');
   if (renderMode && forces3d) p.set('mode', 'render');
+  // Marketing params must stay on the URL. Bitrix reads utm_*, gclid and fbclid from location.
+  for (const [key, value] of bootQuery.entries()) {
+    if (key.startsWith('utm_') || key === 'gclid' || key === 'fbclid') p.set(key, value);
+  }
   const q = p.toString();
   return location.pathname + (q ? `?${q}` : '');
 }
@@ -910,7 +914,43 @@ $('#filter-open').addEventListener('click', () => {
   else showOnly(basePanel());
 });
 
-// ---------- lead form (stub) ----------
+// ---------- lead form (Bitrix CRM form 6) ----------
+let leadApartmentId = '';
+let leadComment = '';
+let bitrixLeadForm = null;
+const BITRIX_FORM_ATTR = 'inline/6/k7hgdm';
+function apartmentComment(a) {
+  return `${towerName(a.block)} · ${t('floor')} ${a.floor} · ${t('apartment')} ${a.number} · 3D Tour`;
+}
+function applyBitrixComment(form) {
+  if (!form || !leadComment || typeof form.setValues !== 'function') return false;
+  try {
+    form.setValues({ DEAL_COMMENTS: leadComment });
+    return true;
+  } catch {
+    return false;
+  }
+}
+window.addEventListener('b24:form:init', (event) => {
+  const form = event.detail?.object;
+  if (!form) return;
+  bitrixLeadForm = form;
+  applyBitrixComment(form);
+});
+window.addEventListener('b24:form:send:success', (event) => {
+  const form = event.detail?.object;
+  if (bitrixLeadForm && form && form !== bitrixLeadForm) return;
+  track('lead_submit', { result: 'ok', apartment_id: leadApartmentId, form: 'bitrix6' });
+});
+function mountBitrixForm(slot) {
+  if (slot.querySelector('script[data-b24-form]')) return;
+  const s = document.createElement('script');
+  s.async = true;
+  s.setAttribute('data-b24-form', BITRIX_FORM_ATTR);
+  s.setAttribute('data-skip-moving', 'true');
+  s.src = `https://crm.biograpi.ge/upload/crm/form/loader_6_k7hgdm.js?${Date.now() / 180000 | 0}`;
+  slot.appendChild(s);
+}
 // Desktop has nothing to place a tel: call with, so the call buttons open a WhatsApp chat there.
 // Phones and tablets keep the tel: link.
 const callViaWhatsApp = () => matchMedia('(hover: hover) and (pointer: fine)').matches;
@@ -925,33 +965,25 @@ const callLabel = (withNumber) => (withNumber ? `${t('call')} · ${callViaWhatsA
 function callLink(place, withNumber = false) {
   return `<a class="call-btn" ${callAttrs()} data-call="${place}">${esc(callLabel(withNumber))}</a>`;
 }
-function leadResult(sent) {
-  const title = sent ? t('formSentTitle') : t('formNotSentTitle');
-  const body = sent ? t('formSent') : t('formNotSent');
-  return `<div class="lead-result" role="status"><h3>${esc(title)}</h3><p>${esc(body)}</p>${callLink('form', true)}</div>`;
-}
 function openLead(id, { notify = false } = {}) {
   const a = aptById(id); const d = $('#lead');
   track(notify ? 'notify_open' : 'lead_open', { apartment_id: a.id });
-  d.innerHTML = `<div class="dlg lead"><div class="dlg-head"><h2>${notify ? t('notifyMe') : t('formTitle')}</h2><button class="x" data-close aria-label="${t('close')}">×</button></div>
-    <form method="dialog" id="lead-form">
-      <label>${t('formApt')}<input name="apartment" value="${towerName(a.block)} · ${t('floor')} ${a.floor} · № ${a.number}" readonly /></label>
-      <label>${t('formName')}<input name="name" autocomplete="name" required /></label>
-      <label>${t('formPhone')}<input name="phone" type="tel" autocomplete="tel" inputmode="tel" required /></label>
-      <p class="stub">${t('formStub')}</p>
-      <div class="form-actions"><button class="primary accent" type="submit">${t('formSubmit')}</button>${callLink('form', true)}</div>
-    </form></div>`;
+  leadApartmentId = a.id;
+  leadComment = apartmentComment(a);
+  let slot = d.querySelector('#b24-form-slot');
+  if (!slot) {
+    d.innerHTML = `<div class="dlg lead"><div class="dlg-head"><h2>${notify ? t('notifyMe') : t('formTitle')}</h2><button class="x" data-close aria-label="${t('close')}">×</button></div>
+      <div id="b24-form-slot" class="b24-slot"></div>
+      <div class="lead-fallback">${callLink('form', true)}</div></div>`;
+    slot = d.querySelector('#b24-form-slot');
+    mountBitrixForm(slot);
+  } else {
+    const title = d.querySelector('h2');
+    if (title) title.textContent = notify ? t('notifyMe') : t('formTitle');
+    applyBitrixComment(bitrixLeadForm);
+  }
   d.showModal();
   d.querySelector('[data-close]').onclick = () => d.close();
-  d.querySelector('#lead-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = Object.fromEntries(new FormData(e.target));
-    const digits = String(fd.phone || '').replace(/\D/g, '');
-    if (digits.length < 9) { e.target.querySelector('.stub').textContent = t('formPhoneInvalid'); track('lead_submit', { result: 'invalid', apartment_id: a.id }); return; }
-    const result = await submitLead({ name: fd.name, phone: fd.phone, apartment_id: a.id });
-    track('lead_submit', { result: result.ok ? 'ok' : (result.stub ? 'stub' : 'error'), apartment_id: a.id });
-    e.target.outerHTML = leadResult(result.ok);
-  };
 }
 document.addEventListener('click', (e) => {
   const a = e.target.closest('[data-call]');
