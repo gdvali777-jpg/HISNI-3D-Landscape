@@ -2,7 +2,7 @@
 
 Static Vite + Three.js site: an interactive 3D view of the Hisni residential complex and its Isani neighbourhood in Tbilisi. Shareable demo for the Hisni by Biograpi project.
 
-Published site: [https://gdvali777-jpg.github.io/HISNI-3D-Landscape/](https://gdvali777-jpg.github.io/HISNI-3D-Landscape/)
+Published site: [https://hisni.biograpi.ge/](https://hisni.biograpi.ge/)
 
 ## What is in it
 
@@ -19,7 +19,7 @@ npm ci
 npm run dev
 ```
 
-Vite uses `base: '/HISNI-3D-Landscape/'`, the same path GitHub Pages serves. Open the URL the dev server prints: [http://localhost:5173/HISNI-3D-Landscape/](http://localhost:5173/HISNI-3D-Landscape/).
+Vite uses `base: '/'`, because the site is served from the domain root. Open the URL the dev server prints: [http://localhost:5173/](http://localhost:5173/).
 
 To check the production build:
 
@@ -28,7 +28,7 @@ npm run build
 npm run preview
 ```
 
-Preview serves `dist/` at [http://localhost:4173/HISNI-3D-Landscape/](http://localhost:4173/HISNI-3D-Landscape/).
+Preview serves `dist/` at [http://localhost:4173/](http://localhost:4173/).
 
 ## Deploy
 
@@ -39,7 +39,7 @@ One-time setup on the repository:
 1. **Settings → Pages → Build and deployment → Source:** choose **GitHub Actions**.
 2. Do not point Pages at a branch folder (`/docs` or `gh-pages`). The workflow is the source.
 
-After a successful run the site is at [https://gdvali777-jpg.github.io/HISNI-3D-Landscape/](https://gdvali777-jpg.github.io/HISNI-3D-Landscape/).
+After a successful run the site is at [https://hisni.biograpi.ge/](https://hisni.biograpi.ge/). `public/CNAME` names that domain. GitHub Pages also keeps the project URL, which redirects to the custom domain once the domain is attached.
 
 ## Data
 
@@ -77,7 +77,7 @@ Option A, an iframe. It is the simplest and is isolated from the site's JS and C
 ```vue
 <template>
   <div class="hisni-3d" ref="box">
-    <iframe v-if="visible" src="https://gdvali777-jpg.github.io/HISNI-3D-Landscape/?lang=ka" title="Hisni 3D" loading="lazy"
+    <iframe v-if="visible" src="https://hisni.biograpi.ge/?lang=ka" title="Hisni 3D" loading="lazy"
             allow="fullscreen" style="width:100%;height:min(88vh,820px);border:0;border-radius:16px"></iframe>
     <button v-else @click="visible = true">3D ხედის ჩართვა</button>
   </div>
