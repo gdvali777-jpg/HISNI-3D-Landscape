@@ -122,7 +122,21 @@ function applyI18n() {
   if ($('#about').open) openAbout();
   paintTourChrome();
   paintViewToggle();
+  paintBackList();
 }
+function paintBackList() {
+  const a = $('#back-list');
+  if (!a) return;
+  const lang = getLang() === 'en' ? 'en' : getLang() === 'ru' ? 'ru' : 'ka';
+  a.textContent = t('backList');
+  a.href = t('backListHref');
+  a.dataset.lang = lang;
+}
+$('#back-list')?.addEventListener('click', () => {
+  const lang = $('#back-list').dataset.lang || (getLang() === 'en' ? 'en' : getLang() === 'ru' ? 'ru' : 'ka');
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({ event: 'back_to_list', lang });
+});
 function paintViewToggle() {
   const toggle = $('#view-toggle');
   if (!toggle) return;
@@ -247,7 +261,7 @@ function urlForState() {
   if (state.view === 'floor' && state.floor != null) p.set('floor', String(state.floor));
   if (state.apt) p.set('apt', state.apt);
   if (state.filters?.block) p.set('block', state.filters.block);
-  if (getLang() === 'en') p.set('lang', 'en');
+  if (getLang() === 'en' || getLang() === 'ru') p.set('lang', getLang());
   if (bootQuery.get('webgl') === '0') p.set('webgl', '0');
   if (bootQuery.get('bg') === 'real') p.set('bg', 'real');
   const quality = bootQuery.get('quality'); if (quality) p.set('quality', quality);
@@ -329,7 +343,7 @@ function renderShell() {
 function applyHistoryUrl() {
   const p = new URLSearchParams(location.search);
   const lang = p.get('lang');
-  if (lang === 'en' || lang === 'ka') setLang(lang);
+  if (lang === 'en' || lang === 'ka' || lang === 'ru') setLang(lang);
   const toRender = !wants3D(p);
   if (toRender) {
     applyDeepLink(p);
@@ -1373,7 +1387,7 @@ async function boot() {
   const params = new URLSearchParams(location.search);
   bootQuery = params;
   const lang = params.get('lang');
-  if (lang === 'en' || lang === 'ka') setLang(lang);
+  if (lang === 'en' || lang === 'ka' || lang === 'ru') setLang(lang);
   renderMode = !wants3D(params);
   app.classList.add('render-armed');
   if (renderMode) app.classList.add('is-render');
