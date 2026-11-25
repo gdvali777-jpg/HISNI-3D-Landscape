@@ -9,9 +9,10 @@ export function mountBlockMenu(root, hooks) {
   function paint() {
     const selected = hooks.selected() || null;
     const blocks = hooks.blocks();
-    btn.textContent = selected ? `${selected} ▾` : `${hooks.t('block')} ▾`;
+    const label = hooks.t('blocks');
+    btn.textContent = `${label} ▾`;
     btn.setAttribute('aria-expanded', String(open));
-    btn.setAttribute('aria-label', selected ? `${hooks.t('block')}: ${hooks.optionLabel(selected)}` : hooks.t('block'));
+    btn.setAttribute('aria-label', selected ? hooks.t('blockChosen').replace('{id}', selected) : label);
     const allOn = !selected;
     const options = [`<button type="button" role="radio" data-block="" aria-checked="${allOn}" tabindex="${allOn ? 0 : -1}">${hooks.t('allBlocks')}</button>`];
     for (const b of blocks) {
@@ -21,7 +22,7 @@ export function mountBlockMenu(root, hooks) {
     }
     menu.innerHTML = options.join('');
     menu.hidden = !open;
-    menu.setAttribute('aria-label', hooks.t('block'));
+    menu.setAttribute('aria-label', hooks.t('blocks'));
   }
 
   function radios() { return [...menu.querySelectorAll('[role="radio"]')]; }

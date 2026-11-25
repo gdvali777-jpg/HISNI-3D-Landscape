@@ -249,8 +249,8 @@ html.boot-render #loading { display: none !important; }
 .render-ph { position: absolute; top: 72px; right: 16px; z-index: 4; margin: 0; padding: 6px 10px; border-radius: 999px; background: #fff6d6; color: #6b5310; font-size: 12px; }
 .render-tip { position: absolute; z-index: 5; pointer-events: none; background: var(--navy); color: var(--cream); padding: 6px 10px; border-radius: 10px; font-size: 13px; }
 .block-picker { position: absolute; z-index: 7; top: calc(max(10px, env(safe-area-inset-top)) + 56px); left: 12px; display: flex; gap: 8px; align-items: flex-start; pointer-events: auto; max-width: calc(100% - 24px); }
-.places-wrap { position: relative; }
-.places-btn { min-height: 44px; min-width: 44px; border: 0; border-radius: 999px; padding: 0 16px; background: rgba(28, 19, 34, .9); color: var(--cream); font-weight: 600; }
+.places-wrap { position: relative; flex: none; }
+.places-btn { min-height: 44px; min-width: 44px; border: 0; border-radius: 999px; padding: 0 16px; background: rgba(28, 19, 34, .9); color: var(--cream); font-weight: 600; white-space: nowrap; }
 .places-panel { position: absolute; top: calc(100% + 6px); left: 0; width: min(280px, calc(100vw - 32px)); max-height: min(420px, 58dvh); overflow: auto; padding: 8px; border-radius: 16px; background: rgba(248, 246, 238, .98); color: var(--ink); box-shadow: var(--shadow); display: grid; gap: 8px; }
 .places-panel[hidden] { display: none; }
 .places-cats { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -269,7 +269,7 @@ html.boot-render #loading { display: none !important; }
 .day-night button { min-height: 44px; min-width: 44px; border: 0; border-radius: 999px; padding: 0 14px; background: transparent; color: var(--cream); }
 .day-night button[aria-pressed="true"] { background: var(--cream); color: var(--navy); }
 .render-panel { position: absolute; z-index: 4; top: calc(max(10px, env(safe-area-inset-top)) + 112px); left: 12px; right: auto; width: max-content; max-width: calc(100% - 24px); display: flex; flex-direction: column; align-items: flex-start; gap: 8px; pointer-events: none; }
-.render-blocks { position: relative; pointer-events: auto; }
+.render-blocks { position: relative; pointer-events: auto; flex: none; }
 .render-block-btn { min-height: 44px; min-width: 44px; border: 0; border-radius: 999px; padding: 0 16px; background: rgba(28, 19, 34, .9); color: var(--cream); font-weight: 600; white-space: nowrap; }
 .render-block-menu { position: absolute; top: calc(100% + 6px); left: 0; min-width: 220px; max-height: min(320px, calc(100dvh - 130px)); overflow: auto; padding: 6px; border-radius: 16px; background: rgba(248, 246, 238, .98); color: var(--ink); box-shadow: var(--shadow); display: grid; gap: 2px; z-index: 2; }
 .render-block-menu[hidden] { display: none; }
