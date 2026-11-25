@@ -460,7 +460,6 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
 #lead .b24-slot .b24-form { max-width: 100%; }
 #lead .lead-fallback { flex: none; display: flex; padding-top: 8px; }
 #lead .lead-fallback .call-btn { min-height: 44px; }
-.lead .stub { background: #fde6dd; color: #8a3b22; padding: 10px 12px; border-radius: 12px; font-size: 13px; }
 .form-actions { display: flex; flex-wrap: wrap; gap: 8px; } .form-actions .primary { flex: 1; }
 .lead-result { display: grid; gap: 10px; padding: 4px 0 8px; } .lead-result h3 { margin: 0; } .lead-result p { margin: 0; } .lead-result .call-btn { background: var(--primary); border-color: var(--primary); }
 .tooltip { position: absolute; z-index: 7; pointer-events: none; background: var(--navy); color: var(--cream); padding: 6px 10px; border-radius: 10px; font-size: 12px; transform: translate(12px, 12px); }
