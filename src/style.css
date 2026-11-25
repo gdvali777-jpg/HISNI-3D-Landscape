@@ -483,6 +483,14 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
   width: auto;
   margin: 0;
 }
+#lead > .b24-window-mounts,
+#lead .b24-window-overlay,
+#lead .b24-window-popup {
+  z-index: 30;
+}
+#lead .b24-window-popup {
+  pointer-events: auto;
+}
 #lead .b24-form-field-agreement .b24-form-control-alert-message {
   position: relative;
   order: -1;
