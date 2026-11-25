@@ -27,10 +27,9 @@ const inlineCss = () => ({
   },
 });
 
-// GitHub Pages project path. Vite prefixes public URLs (`/fonts/…`) and
-// `import.meta.env.BASE_URL` (data, plans, renders) with this. Dev and preview
-// serve the same path, so local URLs match production.
-const PAGES_BASE = '/HISNI-3D-Landscape/';
+// The site is served from the domain root (https://hisni.biograpi.ge/).
+// Vite prefixes public URLs and `import.meta.env.BASE_URL` with this.
+const PAGES_BASE = '/';
 
 export default defineConfig({
   base: PAGES_BASE,

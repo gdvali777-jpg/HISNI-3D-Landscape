@@ -1,8 +1,8 @@
 // Fails if English mode still renders Georgian (U+10A0–U+10FF) in the DOM.
-// Usage: node scripts/check-en.mjs http://127.0.0.1:4173/HISNI-3D-Landscape/
+// Usage: node scripts/check-en.mjs http://127.0.0.1:4173/
 const pw = (await import('playwright').catch(() => null)) || await import('playwright-core');
 
-const base = (process.argv[2] || 'http://127.0.0.1:4173/HISNI-3D-Landscape/').replace(/\/?$/, '/');
+const base = (process.argv[2] || 'http://127.0.0.1:4173/').replace(/\/?$/, '/');
 const ge = /[\u10A0-\u10FF]/;
 const { webkit } = pw;
 const browser = await webkit.launch();
