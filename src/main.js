@@ -123,6 +123,7 @@ function applyI18n() {
   paintTourChrome();
   paintViewToggle();
   paintBackList();
+  paintLeadSending();
 }
 function paintBackList() {
   const a = $('#back-list');
@@ -918,6 +919,8 @@ $('#filter-open').addEventListener('click', () => {
 let leadApartmentId = '';
 let leadComment = '';
 let bitrixLeadForm = null;
+let leadSending = false;
+let leadSubmitSent = false;
 const BITRIX_FORM_ATTR = 'inline/6/k7hgdm';
 function apartmentComment(a) {
   return `${towerName(a.block)} · ${t('floor')} ${a.floor} · ${t('apartment')} ${a.number} · 3D Tour`;
@@ -931,16 +934,59 @@ function applyBitrixComment(form) {
     return false;
   }
 }
+function ownBitrixForm(event) {
+  const form = event.detail?.object;
+  return !(bitrixLeadForm && form && form !== bitrixLeadForm);
+}
+function paintLeadSending() {
+  const note = document.querySelector('#lead-sending');
+  if (!note) return;
+  note.textContent = t('formSending');
+  note.hidden = !leadSending;
+}
+function showLeadToast() {
+  let el = $('#lead-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'lead-toast';
+    el.setAttribute('role', 'status');
+    el.innerHTML = `<p></p><button type="button" class="x" aria-label="${t('close')}">×</button>`;
+    el.querySelector('button').onclick = () => { el.hidden = true; clearTimeout(showLeadToast._t); };
+    app.appendChild(el);
+  }
+  el.querySelector('p').textContent = t('formSentToast');
+  el.querySelector('button').setAttribute('aria-label', t('close'));
+  el.hidden = false;
+  clearTimeout(showLeadToast._t);
+  showLeadToast._t = setTimeout(() => { el.hidden = true; }, 6000);
+}
 window.addEventListener('b24:form:init', (event) => {
   const form = event.detail?.object;
   if (!form) return;
   bitrixLeadForm = form;
   applyBitrixComment(form);
 });
+window.addEventListener('b24:form:submit', (event) => {
+  if (!ownBitrixForm(event)) return;
+  leadSubmitSent = false;
+  leadSending = true;
+  paintLeadSending();
+});
 window.addEventListener('b24:form:send:success', (event) => {
-  const form = event.detail?.object;
-  if (bitrixLeadForm && form && form !== bitrixLeadForm) return;
-  track('lead_submit', { result: 'ok', apartment_id: leadApartmentId, form: 'bitrix6' });
+  if (!ownBitrixForm(event)) return;
+  leadSending = false;
+  paintLeadSending();
+  if (!leadSubmitSent) {
+    leadSubmitSent = true;
+    track('lead_submit', { result: 'ok', apartment_id: leadApartmentId, form: 'bitrix6' });
+  }
+  const d = $('#lead');
+  if (d && !d.open) showLeadToast();
+});
+window.addEventListener('b24:form:send:error', (event) => {
+  if (!ownBitrixForm(event)) return;
+  leadSending = false;
+  paintLeadSending();
 });
 function mountBitrixForm(slot) {
   if (slot.querySelector('script[data-b24-form]')) return;
@@ -982,7 +1028,7 @@ function openLead(id, { notify = false } = {}) {
   let slot = d.querySelector('#b24-form-slot');
   if (!slot) {
     d.innerHTML = `<div class="dlg lead"><div class="dlg-head"><h2>${notify ? t('notifyMe') : t('formTitle')}</h2><button class="x" data-close aria-label="${t('close')}">×</button></div>
-      <div id="b24-form-slot" class="b24-slot"></div>
+      <div id="b24-form-slot" class="b24-slot"><p id="lead-sending" class="lead-sending" hidden></p></div>
       <div class="lead-fallback">${callLink('form', true)}</div></div>`;
     slot = d.querySelector('#b24-form-slot');
     mountBitrixForm(slot);
@@ -991,7 +1037,9 @@ function openLead(id, { notify = false } = {}) {
     if (title) title.textContent = notify ? t('notifyMe') : t('formTitle');
     applyBitrixComment(bitrixLeadForm);
   }
+  paintLeadSending();
   d.showModal();
+  // Closing only hides the dialog. The Bitrix form stays mounted so a send can finish.
   d.querySelector('[data-close]').onclick = () => d.close();
 }
 document.addEventListener('click', (e) => {

@@ -456,7 +456,8 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
 .lead form { display: grid; gap: 10px; } .lead label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); } .lead input { min-height: 48px; border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; font-size: 16px; color: var(--ink); background: #fff; }
 #lead { width: min(520px, 94vw); }
 #lead .dlg.lead { display: flex; flex-direction: column; max-height: min(88dvh, 880px); overflow: hidden; padding: 16px; }
-#lead .b24-slot { flex: 1 1 auto; min-height: 160px; max-height: min(68dvh, 680px); overflow: auto; }
+#lead .b24-slot { position: relative; flex: 1 1 auto; min-height: 160px; max-height: min(68dvh, 680px); overflow: auto; }
+#lead .lead-sending { position: absolute; left: 12px; right: 12px; top: 62%; z-index: 4; margin: 0; text-align: center; font-weight: 700; color: var(--navy); pointer-events: none; }
 #lead .b24-slot .b24-form { max-width: 100%; }
 #lead .lead-fallback { flex: none; display: flex; padding-top: 8px; }
 #lead .lead-fallback .call-btn { min-height: 44px; }
@@ -591,6 +592,9 @@ dialog::backdrop { background: rgba(28,19,34,.5); }
 .facts small + small, .facts b + small { margin-top: 2px; }
 
 #toast { position: absolute; left: 50%; bottom: calc(78px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 30; max-width: min(280px, 86vw); background: var(--navy); color: var(--cream); padding: 10px 16px; border-radius: 999px; font-size: 14px; text-align: center; pointer-events: none; box-shadow: var(--shadow); }
+#lead-toast { position: absolute; left: 12px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 40; max-width: min(320px, calc(100vw - 24px)); display: flex; align-items: flex-start; gap: 8px; background: var(--navy); color: var(--cream); padding: 12px 10px 12px 14px; border-radius: 14px; box-shadow: var(--shadow); }
+#lead-toast p { margin: 0; font-size: 14px; line-height: 1.35; }
+#lead-toast .x { flex: none; width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; color: inherit; font-size: 20px; }
 .leader { position: absolute; left: 0; top: 0; height: 2px; margin-top: -1px; background: rgba(28,19,34,.5); transform-origin: 0 50%; pointer-events: none; display: none; }
 .leader::before { content: ''; position: absolute; left: -3px; top: -2px; width: 6px; height: 6px; border-radius: 50%; background: var(--navy); }
 .night .leader { background: rgba(239,235,212,.6); } .night .leader::before { background: var(--cream); }
