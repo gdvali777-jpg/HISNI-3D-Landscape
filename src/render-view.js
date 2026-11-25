@@ -74,16 +74,15 @@ export async function createRenderView(opts) {
   let mode = 'day';
   // Same breakpoint as the landing still: phones in portrait, and short landscape phones wider than 819px.
   const narrowScreen = () => matchMedia('(max-width: 819px), (max-height: 520px) and (max-width: 1024px)').matches;
-  // Desktop keeps the aerial and the courtyard. Phones drop the courtyard (ეზო / view-04) and the old phone-only still.
+  // Every screen drops the courtyard (ეზო / view-04) and the old phone-only still.
   const pickFrames = () => {
-    const narrow = narrowScreen();
     const list = allFrames.filter((f) => {
       if ((f.mode || 'day') !== mode) return false;
       if (f.only === 'narrow') return false;
-      if (narrow && f.id === 'view-04') return false;
+      if (f.id === 'view-04') return false;
       return true;
     });
-    return list.length ? list : allFrames.filter((f) => (f.mode || 'day') === mode && f.id !== 'view-04');
+    return list.length ? list : allFrames.filter((f) => (f.mode || 'day') === mode && f.id !== 'view-04' && f.only !== 'narrow');
   };
   let frames = pickFrames();
   const QUICK_KEY = 'hisni-quick-filter';
@@ -229,7 +228,7 @@ export async function createRenderView(opts) {
     const frame = frames[index];
     paintModes();
     const spin = document.querySelector('.render-spin');
-    const single = narrowScreen() && frames.length < 2;
+    const single = frames.length < 2;
     spin?.classList.toggle('is-single', single);
     spin?.querySelectorAll('[data-spin]').forEach((b) => { b.hidden = single; });
     if (dots) {
