@@ -57,6 +57,8 @@ export const STRINGS = {
     spinHint: 'გადაათრიე ჰორიზონტალურად ხედის შესაბრუნებლად',
     loading: 'იტვირთება ისანი…',
     formTitle: 'მოთხოვნის გაგზავნა', formName: 'სახელი', formPhone: 'ტელეფონი', formApt: 'ბინა', formSubmit: 'გაგზავნა',
+    formSending: 'მოთხოვნა იგზავნება…',
+    formSentToast: 'მოთხოვნა გაიგზავნა. კონსულტანტი მალე დაგიკავშირდებათ.',
     formThanks: 'მადლობა. ეს დემოა — მოთხოვნა არსად არ გაგზავნილა.',
     formSentTitle: 'მოთხოვნა მიღებულია',
     formSent: 'გმადლობთ. თუ პასუხი არ მოვა, დაგვირეკეთ.',
@@ -140,6 +142,8 @@ export const STRINGS = {
     spinHint: 'Drag sideways to turn the view',
     loading: 'Bringing Isani into view…',
     formTitle: 'Send a request', formName: 'Name', formPhone: 'Phone', formApt: 'Apartment', formSubmit: 'Send',
+    formSending: 'Sending your request…',
+    formSentToast: 'Request sent. A consultant will contact you soon.',
     formThanks: 'Thank you. This is a demo — nothing was sent.',
     formSentTitle: 'Request received',
     formSent: 'Thank you. If you do not hear back, please call.',
@@ -169,6 +173,8 @@ export const STRINGS = {
   },
   ru: {
     backList: '← Список квартир', backListHref: 'https://biograpi.ge/ru/hi1/apartments?view=grid',
+    formSending: 'Отправляем заявку…',
+    formSentToast: 'Заявка отправлена. Консультант скоро свяжется с вами.',
   },
 };
 let lang = typeof window === 'undefined' ? 'ka' : (['en', 'ru'].includes(new URLSearchParams(location.search).get('lang') || localStorage.getItem('hisni-lang')) ? (new URLSearchParams(location.search).get('lang') || localStorage.getItem('hisni-lang')) : 'ka');
