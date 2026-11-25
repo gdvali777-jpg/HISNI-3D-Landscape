@@ -46,14 +46,15 @@ After a successful run the site is at [https://gdvali777-jpg.github.io/HISNI-3D-
 `public/data/apartments.json` (schema_version 2) is a static snapshot, not a live feed. It is built by three scripts, run in this order:
 
 1. `scripts/prep_apartments.py`: the 19 Block III apartment types and 2D/3D plan images from `Floor and Apartment Plans 2D/*.pdf`.
-2. `scripts/prep_site.py`: **Blocks I and II** (527 + 589 apartments) from the **biograpi.ge page snapshot** (status ids 17/18/19 = available/reserved/sold, per the page). Plan images for these blocks stay on `backend.biograpi.ge`.
-3. `scripts/prep_bitrix.py`: **Block III** (589 apartments) from the read-only **Bitrix24 catalog snapshot 14.11.2026** (`bitrix_block3.csv`).
-   - Statuses: free → available, reserved, queue (reservation queue), sold, NFS → nfs (not for sale; its price is not shipped).
-   - Prices are list prices in USD.
-   - Plans: the Bitrix apartment-type name equals the PDF file name, so each `layout_type_code` maps to exactly one of the 19 PDF types (4 codes per type, one per floor band).
-   - CRM deal ids and deal fields are not shipped.
+2. `scripts/prep_site.py`: **Blocks I and II** geometry (527 + 589 apartments) from the earlier biograpi.ge page snapshot. Plan images for these blocks stay on `backend.biograpi.ge`.
+3. `scripts/prep_bitrix.py`: the earlier **Block III** pass. It is not re-run for a refresh, because a later catalog re-coded every Block III `layout_type_code`.
+4. The current status and price for **Blocks I, II and III** (1,705 apartments) come from the read-only **Bitrix catalog export 25.11.2026**.
+   - Statuses: free → available, reserved, queue (reservation queue), sold, NFS → nfs.
+   - A price is stored only for available apartments. Sold, reserved, NFS and queue prices are omitted.
+   - Area, floor and rooms matched the apartments already in the file, so plans, positions, types and orientations were left as they were. Block I `rooms=N` is total rooms, not bedrooms.
+   - CRM deal ids and catalog product ids are not shipped.
 - **Block IV has not been uploaded yet.**
-- The **position of an apartment on the floor plan is schematic** and needs confirming by the architects. Block III facing comes from Bitrix.
+- The **position of an apartment on the floor plan is schematic** and needs confirming by the architects.
 
 `src/data/adapter.js` is the read-only live data hook:
 
