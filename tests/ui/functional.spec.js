@@ -74,3 +74,13 @@ test('360° button is named "360° ხედი" / "360° View"', async ({ page 
   await page.locator('#lang').click();
   await expect(page.locator('#intro-tour')).toHaveText('360° View');
 });
+
+test('apartment data is revalidated on every load, so refreshes show at once', async ({ page }) => {
+  await page.addInitScript(() => {
+    const orig = window.fetch;
+    window.__dataFetch = [];
+    window.fetch = (url, init) => { if (String(url).includes('data/apartments.json')) window.__dataFetch.push(init?.cache || 'default'); return orig(url, init); };
+  });
+  await open3d(page);
+  expect(await page.evaluate(() => window.__dataFetch)).toEqual(['no-cache']);
+});
