@@ -66,6 +66,21 @@ The CTA form calls `submitLead()`, which is a stub that sends nothing.
 
 Call buttons use `CONTACT` in `src/data/adapter.js`: a `tel:` link on phones and tablets, a WhatsApp chat (`CONTACT.whatsapp`) on desktop.
 
+## UI tests
+
+Playwright + axe-core, five viewports (desktop 1440×900, laptop 1280×720, tablet 820×1180, phone 390×844, phone landscape 844×390):
+
+```bash
+npm test
+```
+
+- `tests/ui/design-system.spec.js` — tokens, one control height, one primary action per context.
+- `tests/ui/layout.spec.js` — no overlapping chrome, no horizontal scroll, header grouping, bottom bars (KA and EN).
+- `tests/ui/a11y.spec.js` — axe (contrast, names, target size), keyboard reach and focus rings.
+- `tests/ui/functional.spec.js` — regression guard for the explorer, filters, language, menus, render↔3D, light.
+
+Layout lives in `src/style.css` as zones driven by tokens (`--top-stage`, `--bottom-stage`, `--edge`, `--rail-*`). Place new floating UI from those tokens, not from pixel offsets.
+
 ## Fonts
 
 Corporate fonts **Effra** (English) and **PingL** (Georgian) are subset to WOFF2 in `public/fonts/`. **These require a web-embedding license check before any public production use.** Until that license is confirmed, treat this GitHub Pages site as an internal preview, not a public production launch.
