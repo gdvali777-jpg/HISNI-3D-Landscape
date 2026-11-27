@@ -46,7 +46,8 @@ export function mapBitrixItem(item) {
 }
 
 export async function loadApartments(base = import.meta.env.BASE_URL) {
-  const res = await fetch(`${base}data/apartments.json`);
+  // no-cache: revalidate with the server each load (a cheap 304 when unchanged), so Bitrix refreshes show at once.
+  const res = await fetch(`${base}data/apartments.json`, { cache: "no-cache" });
   const doc = await res.json();
   const types = new Map(doc.types.map((t) => [t.key, t]));
   doc.apartments.forEach((a) => { a.type = types.get(a.type_key); a.area = a.area_m2 ?? a.type.area_m2; a.facing = 'orientation' in a ? a.orientation : a.type.orientation; a.slotR = a.slot ?? a.type.slot; });
