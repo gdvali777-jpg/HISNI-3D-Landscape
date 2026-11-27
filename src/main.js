@@ -103,6 +103,7 @@ function applyI18n() {
   if (hintP) hintP.textContent = t(matchMedia('(hover: hover) and (pointer: fine)').matches ? 'hintMouse' : 'hint');
   document.querySelectorAll('[data-call]').forEach(wireCall);
   $('#layers-toggle')?.setAttribute('aria-label', t('layers'));
+  document.querySelector('.header-nav')?.setAttribute('aria-label', t('navLabel'));
   refreshIntroToggle();
   const srcLink = document.querySelector('#stat-src');
   if (srcLink) srcLink.href = t('statSrcUrl');
@@ -921,10 +922,7 @@ let leadComment = '';
 let bitrixLeadForm = null;
 let leadSending = false;
 let leadSubmitSent = false;
-// One Bitrix CRM form per site language. A language without its own form uses the Georgian one.
-const BITRIX_FORMS = { ka: { id: 6, key: 'k7hgdm' }, en: { id: 7, key: 'u63o72' } };
-let bitrixFormAttr = '';
-function bitrixFormFor(lang) { return BITRIX_FORMS[lang] || BITRIX_FORMS.ka; }
+const BITRIX_FORM_ATTR = 'inline/6/k7hgdm';
 function apartmentComment(a) {
   return `${towerName(a.block)} · ${t('floor')} ${a.floor} · ${t('apartment')} ${a.number} · 3D Tour`;
 }
@@ -981,7 +979,7 @@ window.addEventListener('b24:form:send:success', (event) => {
   paintLeadSending();
   if (!leadSubmitSent) {
     leadSubmitSent = true;
-    track('lead_submit', { result: 'ok', apartment_id: leadApartmentId, form: 'bitrix' + bitrixFormFor(getLang()).id });
+    track('lead_submit', { result: 'ok', apartment_id: leadApartmentId, form: 'bitrix6' });
   }
   const d = $('#lead');
   if (d && !d.open) showLeadToast();
@@ -992,20 +990,12 @@ window.addEventListener('b24:form:send:error', (event) => {
   paintLeadSending();
 });
 function mountBitrixForm(slot) {
-  const f = bitrixFormFor(getLang());
-  const attr = `inline/${f.id}/${f.key}`;
-  if (bitrixFormAttr === attr && slot.querySelector('script[data-b24-form]')) return;
-  // The language changed since the form was mounted: swap in that language's form.
-  // Never while a send is running, so a submit in progress can finish.
-  if (leadSending) return;
-  [...slot.children].forEach((el) => { if (el.id !== 'lead-sending') el.remove(); });
-  bitrixLeadForm = null;
-  bitrixFormAttr = attr;
+  if (slot.querySelector('script[data-b24-form]')) return;
   const s = document.createElement('script');
   s.async = true;
-  s.setAttribute('data-b24-form', attr);
+  s.setAttribute('data-b24-form', BITRIX_FORM_ATTR);
   s.setAttribute('data-skip-moving', 'true');
-  s.src = `https://crm.biograpi.ge/upload/crm/form/loader_${f.id}_${f.key}.js?${Date.now() / 180000 | 0}`;
+  s.src = `https://crm.biograpi.ge/upload/crm/form/loader_6_k7hgdm.js?${Date.now() / 180000 | 0}`;
   slot.appendChild(s);
 }
 // The agreement window is appended to body. A modal <dialog> paints in the top layer,
@@ -1046,7 +1036,6 @@ function openLead(id, { notify = false } = {}) {
   } else {
     const title = d.querySelector('h2');
     if (title) title.textContent = notify ? t('notifyMe') : t('formTitle');
-    mountBitrixForm(slot);
     applyBitrixComment(bitrixLeadForm);
   }
   paintLeadSending();
