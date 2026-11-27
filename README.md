@@ -48,11 +48,27 @@ After a successful run the site is at [https://hisni.biograpi.ge/](https://hisni
 1. `scripts/prep_apartments.py`: the 19 Block III apartment types and 2D/3D plan images from `Floor and Apartment Plans 2D/*.pdf`.
 2. `scripts/prep_site.py`: **Blocks I and II** geometry (527 + 589 apartments) from the earlier biograpi.ge page snapshot. Plan images for these blocks stay on `backend.biograpi.ge`.
 3. `scripts/prep_bitrix.py`: the earlier **Block III** pass. It is not re-run for a refresh, because a later catalog re-coded every Block III `layout_type_code`.
-4. The current status and price for **Blocks I, II and III** (1,705 apartments) come from the read-only **Bitrix catalog export 25.11.2026**.
-   - Statuses: free → available, reserved, queue (reservation queue), sold, NFS → nfs.
+4. The current status and price for **Blocks I, II and III** (1,705 apartments) come from the **Bitrix24 catalog** (section HISNI), refreshed by `scripts/refresh-inventory.mjs`.
+   - Statuses: თავისუფალი → available, დაჯავშნილი → reserved, ჯავშნის რიგი → queue, გაყიდული → sold, NFS → nfs.
    - A price is stored only for available apartments. Sold, reserved, NFS and queue prices are omitted.
-   - Area, floor and rooms matched the apartments already in the file, so plans, positions, types and orientations were left as they were. Block I `rooms=N` is total rooms, not bedrooms.
+   - Only status and price change. Plans, positions, types and orientations are never touched.
+   - The script writes nothing unless every site apartment is matched exactly once, every status is known and every available apartment has a price. It also refuses when more than 25% of statuses change at once.
    - CRM deal ids and catalog product ids are not shipped.
+
+### Automatic refresh
+
+`.github/workflows/refresh-inventory.yml` runs every hour (and from the Actions tab, with a dry-run option). It reads Bitrix with the repository secret **`BITRIX_WEBHOOK_URL`**, commits `public/data/apartments.json` only when something changed, and redeploys the site. Without the secret it does nothing.
+
+Setup, once:
+
+1. In Bitrix24 (crm.biograpi.ge): **Developer resources → Other → Inbound webhook**, permission **CRM (crm)**. Copy the URL (`https://crm.biograpi.ge/rest/<user>/<code>/`). The script only calls `crm.product.property.list/get` and `crm.product.list`.
+2. In GitHub: **Settings → Secrets and variables → Actions → New repository secret**, name `BITRIX_WEBHOOK_URL`, value the URL.
+3. Actions → *Refresh inventory from Bitrix* → **Run workflow** with *dry run* on, and check the log.
+
+Manual refresh from a hand export: `node scripts/refresh-inventory.mjs --from-file rows.json [--dry-run]` with rows `{ block: "HISNI1", floor, number, status, price }`.
+
+The as-is data from before automation is kept in `data-backups/apartments-2026-11-25.json`. To roll back, copy it over `public/data/apartments.json`, or revert the refresh commit.
+
 - **Block IV has not been uploaded yet.**
 - The **position of an apartment on the floor plan is schematic** and needs confirming by the architects.
 
@@ -71,7 +87,8 @@ Call buttons use `CONTACT` in `src/data/adapter.js`: a `tel:` link on phones and
 Playwright + axe-core, five viewports (desktop 1440×900, laptop 1280×720, tablet 820×1180, phone 390×844, phone landscape 844×390):
 
 ```bash
-npm test
+npm test            # UI (Playwright + axe)
+npm run test:data   # data refresh script
 ```
 
 - `tests/ui/design-system.spec.js` — tokens, one control height, one primary action per context.
