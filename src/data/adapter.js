@@ -2,9 +2,9 @@
  * Inventory data layer.
  *
  * Static apartment geometry/plan data lives in /data/apartments.json (generated from the
- * project's floor-plan PDFs). Status and price for Blocks I, II and III come from a read-only
- * Bitrix catalog export (25.11.2026; available list prices only; sold, reserved, NFS and queue
- * prices omitted; no CRM deal ids shipped). Block IV has not been uploaded.
+ * project's floor-plan PDFs). Status and price for Blocks I, II and III are refreshed hourly from the
+ * Bitrix catalog by scripts/refresh-inventory.mjs (GitHub Action; available list prices only; sold,
+ * reserved, NFS and queue prices omitted; no CRM deal ids shipped). Block IV has not been uploaded.
  *
  * Later, live status/price will come READ-ONLY from Bitrix24 CRM (crm.biograpi.ge).
  * Do NOT call Bitrix from the browser and never ship a webhook/token to the client.
