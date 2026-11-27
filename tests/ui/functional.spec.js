@@ -67,3 +67,10 @@ test('light switch changes the scene to night', async ({ page }) => {
   await page.locator('.light button[data-light="night"]').click();
   await expect(page.locator('#app')).toHaveClass(/night/);
 });
+
+test('360° button is named "360° ხედი" / "360° View"', async ({ page }) => {
+  await open3d(page);
+  await expect(page.locator('#intro-tour')).toHaveText('360° ხედი');
+  await page.locator('#lang').click();
+  await expect(page.locator('#intro-tour')).toHaveText('360° View');
+});
