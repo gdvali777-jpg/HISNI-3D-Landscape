@@ -103,6 +103,7 @@ function applyI18n() {
   if (hintP) hintP.textContent = t(matchMedia('(hover: hover) and (pointer: fine)').matches ? 'hintMouse' : 'hint');
   document.querySelectorAll('[data-call]').forEach(wireCall);
   $('#layers-toggle')?.setAttribute('aria-label', t('layers'));
+  document.querySelector('.header-nav')?.setAttribute('aria-label', t('navLabel'));
   refreshIntroToggle();
   const srcLink = document.querySelector('#stat-src');
   if (srcLink) srcLink.href = t('statSrcUrl');
