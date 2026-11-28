@@ -176,6 +176,7 @@ export const STRINGS = {
   ru: {
     navLabel: 'Навигация', backList: '← Список квартир', backListHref: 'https://biograpi.ge/ru/hi1/apartments?view=grid',
     call: 'Позвонить', whatsapp: 'WhatsApp',
+    neighborhood: 'Район', towers: 'Башни', block: 'Блок', floor: 'Этаж', close: 'Закрыть',
     formSending: 'Отправляем заявку…',
     formSentToast: 'Заявка отправлена. Консультант скоро свяжется с вами.',
     avail: 'Свободна', reserved: 'Забронирована', sold: 'Продана', nfs: 'Не продаётся', queue: 'Очередь',
