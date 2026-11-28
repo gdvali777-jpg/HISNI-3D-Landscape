@@ -114,9 +114,7 @@ function applyI18n() {
   $('#explorer-close').title = t('close');
   $('#explorer-handle').setAttribute('aria-label', t(collapsed ? 'sheetExpand' : 'sheetCollapse'));
   document.documentElement.lang = getLang();
-  document.querySelectorAll('[data-call]').forEach((a) => {
-    a.textContent = a.dataset.via === 'whatsapp' ? t('whatsapp') : `${t('call')} · ${CONTACT.phone}`;
-  });
+  document.querySelectorAll('[data-call]').forEach(paintCallLink);
   paintIntro();
   renderCrumbs();
   renderLabels(); renderExplorer(); renderCard(); state.scene?.request(); if (!$('#filters').hidden) renderFilters();
@@ -1116,8 +1114,15 @@ function wireCall(a) {
   a.removeAttribute('target');
   a.removeAttribute('rel');
 }
+// The number stays on the link and in the accessible name. The button shows only the word.
+function callName() { return `${t('call')}, ${CONTACT.phone}`; }
+function paintCallLink(a) {
+  if (a.dataset.via === 'whatsapp') { a.textContent = t('whatsapp'); return; }
+  a.textContent = t('call');
+  a.setAttribute('aria-label', callName());
+}
 function callLink(place) {
-  return `<span class="call-pair"><a class="call-btn" href="${CONTACT.tel}" data-call="${place}" data-via="tel">${esc(t('call'))} · ${esc(CONTACT.phone)}</a><a class="call-btn wa" href="${CONTACT.whatsapp}" target="_blank" rel="noopener" data-call="${place}" data-via="whatsapp">${esc(t('whatsapp'))}</a></span>`;
+  return `<span class="call-pair"><a class="call-btn" href="${CONTACT.tel}" data-call="${place}" data-via="tel" aria-label="${esc(callName())}">${esc(t('call'))}</a><a class="call-btn wa" href="${CONTACT.whatsapp}" target="_blank" rel="noopener" data-call="${place}" data-via="whatsapp">${esc(t('whatsapp'))}</a></span>`;
 }
 function openLead(id, { notify = false } = {}) {
   const a = aptById(id); const d = $('#lead');
