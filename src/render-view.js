@@ -533,6 +533,7 @@ export async function createRenderView(opts) {
     },
     refresh() { if (!root.hidden) { paintFilterForm(); draw(); } },
     zoomBy(f) { setZoom(viewZoom * f); },
+    closeQuick() { setQuick(false); },
     block() { return selected; },
     setBlock(id) { selectBlock(id || null, { toggle: false, notify: false, soon: false }); },
     mode() { return mode; },
