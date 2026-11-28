@@ -288,7 +288,7 @@ export async function createRenderView(opts) {
       <p class="rf-count" role="status"><b data-rf-n></b> ${opts.t('results')}</p>
       <button type="button" class="primary" data-rf-list></button>
       <button type="button" class="btn-ghost" data-reset>${opts.t('reset')}</button>
-      <a class="call-btn" ${opts.callAttrs()} data-call="render">${opts.t('call')}</a>`;
+      ${opts.callButtons()}`;
     paintCount();
   }
 

@@ -238,6 +238,9 @@ footer a { color: inherit; display: inline-flex; align-items: center; min-height
 .floor-grid.count-queue button small { color: var(--queue); } .floor-grid.count-queue button small::before { background: var(--queue); }
 .floor-grid.count-nfs button small { color: #5c5c5c; } .floor-grid.count-nfs button small::before { background: var(--nfs); }
 .floor-grid.count-mixed button small { color: var(--text); } .floor-grid.count-mixed button small::before { background: var(--text); }
+.call-pair { display: flex; gap: 8px; flex-wrap: wrap; width: 100%; }
+.call-pair .call-btn { flex: 1 1 140px; text-align: center; }
+.call-pair .wa { background: #1f8a4c; color: #fff; border-color: #1f8a4c; }
 .legend { display: flex; gap: var(--space-2); flex-wrap: nowrap; align-items: center; font-size: var(--font-sm); margin: var(--space-2) 0 10px; color: var(--text-muted); overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
 .legend::-webkit-scrollbar { display: none; }
 .legend-chip { min-height: var(--control-h); min-width: var(--control-h); flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 14px; border-radius: var(--radius-pill); border: 1px solid var(--border); background: #fff; color: var(--text); font-size: var(--font-sm); line-height: 1.15; }
