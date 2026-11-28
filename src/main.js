@@ -857,6 +857,10 @@ function renderFilters() {
   const viewCount = (f.statuses.size || rangeOn)
     ? res.length
     : state.doc.apartments.filter((a) => a.status === 'available' && (!f.block || a.block === f.block) && (!f.kinds.size || f.kinds.has(a.type.kind))).length;
+  const shown = (f.block && !f.statuses.size && !rangeOn)
+    ? res.filter((a) => a.status === 'available' && (!f.kinds.size || f.kinds.has(a.type.kind)))
+    : res;
+  const shownCount = f.block ? viewCount : shown.length;
   const kinds = ['studio', '1br', '2br'], sts = STATUSES;
   el.innerHTML = `<div class="sheet-head"><h2>${t('filters')}</h2><button class="x" data-close aria-label="${t('close')}">×</button></div>
     <form id="ff">
@@ -867,11 +871,11 @@ function renderFilters() {
       <fieldset><legend>${t('floorRange')}</legend><div class="range"><input name="floorMin" inputmode="numeric" placeholder="6" value="${f.floorMin}" aria-label="${t('floorRange')} min"/><input name="floorMax" inputmode="numeric" placeholder="36" value="${f.floorMax}" aria-label="${t('floorRange')} max"/></div></fieldset>
       <fieldset><legend>${t('priceRange')}</legend><div class="range"><input name="priceMin" inputmode="numeric" placeholder="${t('min')}" value="${f.priceMin}" aria-label="${t('priceRange')} min"/><input name="priceMax" inputmode="numeric" placeholder="${t('max')}" value="${f.priceMax}" aria-label="${t('priceRange')} max"/></div></fieldset>
     </form>
-    <p><b>${res.length}</b> ${t('results')}</p>
-    <ul class="apt-list results" aria-label="${t('list')}">${res.slice(0, filterLimit).map((a) => `<li><button data-apt="${a.id}"><i class="dot ${a.status}"></i><span><b>№ ${a.number}</b> · ${towerName(a.block)} · ${t('floor')} ${a.floor}<br/><span class="meta">${kindLabel(a.type.kind)} · ${a.area} ${m2()} · ${statusLabel(a.status)}</span></span>${showsPrice(a) ? `<span class="pr">${priceOf(a)}</span>` : ''}</button></li>`).join('') || `<li>${t('noResults')}</li>`}</ul>
-    ${res.length > filterLimit ? `<button type="button" class="btn-ghost more" data-more>${t('showMore')} (+${Math.min(40, res.length - filterLimit)})</button>` : ''}
+    <p><b>${shownCount}</b> ${t('results')}</p>
+    <ul class="apt-list results" aria-label="${t('list')}">${shown.slice(0, filterLimit).map((a) => `<li><button data-apt="${a.id}"><i class="dot ${a.status}"></i><span><b>№ ${a.number}</b> · ${towerName(a.block)} · ${t('floor')} ${a.floor}<br/><span class="meta">${kindLabel(a.type.kind)} · ${a.area} ${m2()} · ${statusLabel(a.status)}</span></span>${showsPrice(a) ? `<span class="pr">${priceOf(a)}</span>` : ''}</button></li>`).join('') || `<li>${t('noResults')}</li>`}</ul>
+    ${shown.length > filterLimit ? `<button type="button" class="btn-ghost more" data-more>${t('showMore')} (+${Math.min(40, shown.length - filterLimit)})</button>` : ''}
     <p class="note">${t('priceUpdated')} ${snapDate()}</p>
-    <div class="filter-foot"><button class="btn-ghost" data-reset>${t('reset')}</button><button class="primary" data-close>${t('showList')} (${f.block ? viewCount : res.length})</button></div>`;
+    <div class="filter-foot"><button class="btn-ghost" data-reset>${t('reset')}</button><button class="primary" data-close>${t('showList')} (${shownCount})</button></div>`;
   el.scrollTop = scroll;
   placeBlockMenu();
 }
@@ -964,7 +968,7 @@ function filterCounts() {
   const rangeOn = ['areaMin', 'areaMax', 'floorMin', 'floorMax', 'priceMin', 'priceMax'].some((k) => f[k] !== '');
   if (!f.block || f.statuses.size || rangeOn) return { total, view: total };
   const view = state.doc.apartments.filter((a) => a.status === 'available' && a.block === f.block && (!f.kinds.size || f.kinds.has(a.type.kind))).length;
-  return { total, view };
+  return { total: view, view };
 }
 function openFilterSheet() {
   filterLimit = 40;
