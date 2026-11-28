@@ -67,6 +67,8 @@ Setup, once:
 
 Manual refresh from a hand export: `node scripts/refresh-inventory.mjs --from-file rows.json [--dry-run]` with rows `{ block: "HISNI1", floor, number, status, price }`.
 
+The date shown in the demo (“price and status updated”) is 28.11.2026.
+
 The as-is data from before automation is kept in `data-backups/apartments-2026-11-25.json`. To roll back, copy it over `public/data/apartments.json`, or revert the refresh commit.
 
 - **Block IV has not been uploaded yet.**
