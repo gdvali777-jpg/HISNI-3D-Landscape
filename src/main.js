@@ -1216,7 +1216,7 @@ function makeLabels(S) {
 function focusPoi(p) {
   state.hotPoi = p.id;
   labelEls.forEach(({ el, poi }) => { if (poi) el.classList.toggle('is-hot', poi.id === p.id); });
-  if (renderMode) return;
+  if (renderMode) { showPlace(p); return; }
   state.scene?.focusPoint(p.x, p.z);
   state.scene?.request();
 }
