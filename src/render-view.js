@@ -47,9 +47,20 @@ function floorEdges(poly, floorMin, floorMax, k = 0.32) {
     return yT + (yB - yT) * s;
   };
   const bands = [];
+  const xs = poly.map((p) => p[0]);
+  const x0 = Math.min(...xs);
+  const x1 = Math.max(...xs);
   for (let f = floorMax; f >= floorMin; f--) {
     const i = floorMax - f;
-    const slice = bandPoly(poly, yAt(i), yAt(i + 1));
+    const y0 = yAt(i);
+    const y1 = yAt(i + 1);
+    let slice = bandPoly(poly, y0, y1);
+    // The roof curve clips the top floor down to a few pixels. Give it the tower's width.
+    if (slice) {
+      const sx = slice.map((p) => p[0]);
+      const narrow = Math.max(...sx) - Math.min(...sx) < (x1 - x0) * 0.45;
+      if (narrow) slice = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+    }
     if (slice) bands.push({ floor: f, poly: slice });
   }
   return bands;
@@ -380,9 +391,22 @@ export async function createRenderView(opts) {
     hoverTip(el, e);
   });
   svg.addEventListener('pointerleave', () => { tip.hidden = true; });
+  function floorAtPoint(x, y) {
+    const bands = [...svg.querySelectorAll('.floor-band')];
+    let best = null;
+    let bestD = Infinity;
+    for (const el of bands) {
+      const r = el.getBoundingClientRect();
+      if (x < r.left - 12 || x > r.right + 12) continue;
+      const d = Math.abs(y - (r.top + r.height / 2));
+      const reach = Math.max(14, r.height / 2 + 2);
+      if (d <= reach && d < bestD) { best = el; bestD = d; }
+    }
+    return best;
+  }
   svg.addEventListener('click', (e) => {
     if (suppressClick) { suppressClick = false; return; }
-    const floor = e.target.closest?.('[data-floor]');
+    const floor = e.target.closest?.('[data-floor]') || floorAtPoint(e.clientX, e.clientY);
     if (floor) { opts.onFloor(floor.dataset.block, +floor.dataset.floor); return; }
     const block = e.target.closest?.('[data-block]');
     if (block) selectBlock(block.dataset.block, { toggle: true, notify: true });
