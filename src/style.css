@@ -146,6 +146,8 @@ button { cursor: pointer; }
 .crumbs::-webkit-scrollbar { display: none; }
 .crumbs button { min-height: var(--control-h); flex: 0 0 auto; border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--surface); padding: 0 14px; font-size: var(--font-sm); box-shadow: var(--elev-1); touch-action: manipulation; }
 .crumbs button[aria-current] { background: var(--navy); color: var(--cream); border-color: var(--navy); }
+#render-svg .floor-band:focus-visible, #render-svg .block-hit:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+button:focus-visible, a:focus-visible { outline: 3px solid var(--navy); outline-offset: 2px; }
 .crumbs .crumb-x { width: var(--control-h); padding: 0; font-size: 20px; }
 
 .explorer { position: absolute; z-index: var(--z-scene-ui); left: var(--edge); top: calc(var(--top-stage) + var(--control-h) + var(--space-3)); width: 380px; max-height: calc(100dvh - var(--top-stage) - var(--control-h) - var(--space-3) - var(--bottom-stage)); overflow: hidden; padding: 0; display: none; flex-direction: column; }

@@ -1529,6 +1529,7 @@ function renderHooks() {
 async function openRender() {
   renderMode = true;
   app.classList.add('is-render', 'render-armed');
+  $('#viewport').tabIndex = -1;
   paintViewToggle();
   closeRenderSheet();
   if (!renderApi) {
@@ -1558,6 +1559,7 @@ async function openRender() {
 async function leaveRender() {
   returnHomeToRender = true;
   renderMode = false;
+  $('#viewport').tabIndex = 0;
   app.classList.remove('is-render');
   app.classList.add('render-armed');
   document.documentElement.classList.remove('boot-render');
