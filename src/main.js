@@ -3,6 +3,7 @@ import { t, getLang, setLang, STRINGS } from './i18n.js';
 import { loadApartments, CONTACT } from './data/adapter.js';
 import { track } from './analytics.js';
 import { mountBlockMenu } from './block-menu.js';
+import { apartmentsOnFloor, freeOnFloor, listedOnFloor } from './floor-match.js';
 
 const BASE = import.meta.env.BASE_URL;
 const $ = (s, r = document) => r.querySelector(s);
@@ -220,10 +221,11 @@ function matches(a, f = state.filters) {
 }
 const filtersActive = () => { const f = state.filters; return !!f.block || f.kinds.size || f.statuses.size || ['areaMin', 'areaMax', 'floorMin', 'floorMax', 'priceMin', 'priceMax'].some((k) => f[k] !== ''); };
 const statusFilterOn = () => state.filters.statuses.size > 0;
-// Floor tiles count available apartments until a status chip is on; then they count the selected statuses.
-// Other Filters-panel constraints (type, area, price, floor) always apply, via the same `matches()`.
+// Floor tiles use the same apartments as the floor panel: free apartments until a status chip is on.
 function floorCount(blockId, floor) {
-  return state.doc.apartments.filter((a) => a.block === blockId && a.floor === floor && matches(a) && (statusFilterOn() || a.status === 'available')).length;
+  const rows = state.doc.apartments;
+  if (statusFilterOn()) return listedOnFloor(rows, blockId, floor, state.filters.statuses).length;
+  return freeOnFloor(rows, blockId, floor).length;
 }
 function filteredCount(apts) {
   return statusFilterOn() ? apts.filter((a) => matches(a)).length : apts.length;
@@ -235,10 +237,8 @@ function floorCountLabel(n) {
 }
 // A green floor (it has a free apartment) opens on free apartments until the user picks other chips.
 function applyFloorStatusDefault() {
-  if (state.view !== 'floor' || statusFilterOn()) return;
-  const open = { ...state.filters, statuses: new Set() };
-  const hasFree = floorApts().some((a) => a.status === 'available' && matches(a, open));
-  if (hasFree) state.filters.statuses = new Set(['available']);
+  if (state.view !== 'floor' || statusFilterOn() || !state.doc) return;
+  if (freeOnFloor(state.doc.apartments, state.tower, state.floor).length) state.filters.statuses = new Set(['available']);
 }
 function floorHeading(shown) {
   const sts = STATUSES.filter((s) => state.filters.statuses.has(s));
@@ -569,7 +569,7 @@ function setView(v, opts = {}) {
   markTowerBadges();
   track('view_change', { view: state.view, tower: state.tower || '', floor: state.floor ?? '' });
 }
-const floorApts = () => state.doc.apartments.filter((a) => a.block === state.tower && a.floor === state.floor);
+const floorApts = () => apartmentsOnFloor(state.doc?.apartments || [], state.tower, state.floor);
 function recolor() {
   if (!state.scene || state.view !== 'floor') return;
   const dim = new Set(floorApts().filter((a) => filtersActive() && !matches(a)).map((a) => a.id));
@@ -627,6 +627,7 @@ function toggleStatus(s) {
   if (set.has(s)) set.delete(s); else set.add(s);
   renderExplorer();
   recolor();
+  renderApi?.refresh();
   if (!$('#filters').hidden) renderFilters();
   $(`#explorer [data-status="${s}"]`)?.focus();
 }
@@ -650,7 +651,7 @@ function renderExplorer() {
       <p class="note">${b.typical_floor_plan ? `<a href="${BASE}${b.typical_floor_plan}" target="_blank" rel="noopener">${t('typeL')} ↗</a> · ` : ''}${sourceNote(b.id)}</p>`;
   } else if (state.view === 'floor') {
     const all = floorApts();
-    const listed = statusFilterOn() ? all.filter((a) => state.filters.statuses.has(a.status)) : all;
+    const listed = listedOnFloor(state.doc.apartments, state.tower, state.floor, statusFilterOn() ? state.filters.statuses : null);
     const totalLine = listed.length !== all.length ? `<p class="floor-total">${esc(t('floorAll'))} ${all.length} ${esc(t('apartments'))}</p>` : '';
     const list = listed.length
       ? `<ul class="apt-list">${listed.map((a) => `<li><button data-apt="${a.id}" ${a.id === state.apt ? 'aria-current="true"' : ''} style="${filtersActive() && !matches(a) ? 'opacity:.45' : ''}"><i class="dot ${a.status}"></i><span><b>№ ${a.number}</b> · ${kindLabel(a.type.kind)}<br/><span class="meta">${a.area} ${m2()} · ${statusLabel(a.status)}</span></span>${showsPrice(a) ? `<span class="pr">${priceOf(a)}</span>` : ''}</button></li>`).join('')}</ul>`

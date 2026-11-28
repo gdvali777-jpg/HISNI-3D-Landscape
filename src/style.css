@@ -228,6 +228,8 @@ footer a { color: inherit; display: inline-flex; align-items: center; min-height
 .floor-grid button { min-height: var(--control-h-lg); border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
 .floor-grid button b { font-size: var(--font-md); } .floor-grid button small { font-size: var(--font-xs); color: var(--text-subtle); }
 .floor-grid button.none { opacity: .55; }
+.floor-grid button.none small { color: var(--text-subtle); }
+.floor-grid button.none small::before { background: var(--text-subtle); }
 .floor-grid button[aria-current] { background: var(--navy); color: var(--cream); } .floor-grid button[aria-current] small { color: var(--cream); }
 .floor-grid button small::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--available); margin-right: 3px; vertical-align: 1px; }
 .floor-grid.count-available button small { color: var(--primary-d); }

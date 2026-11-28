@@ -1,6 +1,8 @@
 // Frame-sequence spinner. Frames and polygons come from public/data/render-frames.json.
 // Floor bands are clipped out of each block silhouette so a later mask pass can replace them.
 
+import { apartmentsOnFloor, freeOnFloor } from './floor-match.js';
+
 const BASE = import.meta.env.BASE_URL;
 const GREEN = '#8A9B48';
 const CLAY = '#E78E75';
@@ -198,14 +200,18 @@ export async function createRenderView(opts) {
   }
 
   function bandFill(block, floor) {
-    const rows = opts.apartments().filter((a) => a.block === block && a.floor === floor);
-    const pool = opts.filtersActive() ? rows.filter((a) => opts.matches(a)) : rows;
-    if (!pool.length) return 'rgba(28,19,34,0.18)';
-    if (pool.some((a) => a.status === 'available')) return 'rgba(138,155,72,0.55)';
-    if (pool.some((a) => a.status === 'reserved')) return 'rgba(226,165,75,0.5)';
-    if (pool.some((a) => a.status === 'queue')) return 'rgba(79,111,168,0.5)';
-    if (pool.some((a) => a.status === 'sold')) return 'rgba(181,82,74,0.38)';
-    return 'rgba(154,154,154,0.4)';
+    const rows = apartmentsOnFloor(opts.apartments(), block, floor);
+    const statuses = opts.filters().statuses;
+    // With no chip, opening the floor shows its free apartments, so that is the highlighted set.
+    const shown = statuses.size
+      ? rows.filter((a) => statuses.has(a.status))
+      : (freeOnFloor(opts.apartments(), block, floor).length ? freeOnFloor(opts.apartments(), block, floor) : rows);
+    if (!shown.length) return 'rgba(28,19,34,0.5)';
+    if (shown.some((a) => a.status === 'available')) return 'rgba(138,155,72,0.88)';
+    if (shown.some((a) => a.status === 'reserved')) return 'rgba(226,165,75,0.8)';
+    if (shown.some((a) => a.status === 'queue')) return 'rgba(79,111,168,0.8)';
+    if (shown.some((a) => a.status === 'sold')) return 'rgba(181,82,74,0.78)';
+    return 'rgba(154,154,154,0.6)';
   }
 
   function chipText(id, compact) {
