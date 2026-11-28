@@ -4,6 +4,7 @@ import { loadApartments, CONTACT } from './data/adapter.js';
 import { track } from './analytics.js';
 import { mountBlockMenu } from './block-menu.js';
 import { apartmentsOnFloor, freeOnFloor, listedOnFloor } from './floor-match.js';
+import { validAptId, validBlock, validFloor, validView } from './params.js';
 
 const BASE = import.meta.env.BASE_URL;
 const $ = (s, r = document) => r.querySelector(s);
@@ -313,21 +314,24 @@ function syncHistory() {
   histBlock = blockNow;
 }
 function applyDeepLink(params) {
-  mapMode = params.get('view') === 'neighborhood' ? 'neighborhood' : null;
-  const aptId = params.get('apt');
+  const v = validView(params.get('view'));
+  mapMode = v === 'neighborhood' ? 'neighborhood' : null;
+  const aptId = validAptId(params.get('apt'));
   if (aptId && aptById(aptId)) {
     const a = aptById(aptId);
     Object.assign(state, { view: 'floor', tower: a.block, floor: a.floor, apt: a.id });
     state.filters.block = a.block;
     return;
   }
-  const v = params.get('view');
-  if (v === 'floor') Object.assign(state, { view: 'floor', tower: params.get('tower') || 'III', floor: +(params.get('floor') || 20), apt: null });
-  else if (v === 'block') Object.assign(state, { view: 'block', tower: params.get('tower') || 'III', floor: null, apt: null });
+  const tower = validBlock(params.get('tower'));
+  const floor = validFloor(params.get('floor'));
+  if (v === 'floor' && tower && floor) Object.assign(state, { view: 'floor', tower, floor, apt: null });
+  else if (v === 'floor' && tower) Object.assign(state, { view: 'block', tower, floor: null, apt: null });
+  else if (v === 'block') Object.assign(state, { view: 'block', tower: tower || 'III', floor: null, apt: null });
   else if (v === 'towers') Object.assign(state, { view: 'towers', tower: null, floor: null, apt: null });
   else Object.assign(state, { view: 'intro', tower: null, floor: null, apt: null });
-  const block = params.get('block');
-  const known = block && state.doc?.blocks?.some((b) => b.id === block);
+  const block = validBlock(params.get('block'));
+  const known = !!block;
   // An explicit shallower view wins. Otherwise ?block=I opens that block.
   const explicitView = v === 'towers' || v === 'intro' || mapMode === 'neighborhood';
   if (known && state.tower !== block && !explicitView) {
@@ -656,7 +660,7 @@ function renderExplorer() {
     const list = listed.length
       ? `<ul class="apt-list">${listed.map((a) => `<li><button data-apt="${a.id}" ${a.id === state.apt ? 'aria-current="true"' : ''} style="${filtersActive() && !matches(a) ? 'opacity:.45' : ''}"><i class="dot ${a.status}"></i><span><b>№ ${a.number}</b> · ${kindLabel(a.type.kind)}<br/><span class="meta">${a.area} ${m2()} · ${statusLabel(a.status)}</span></span>${showsPrice(a) ? `<span class="pr">${priceOf(a)}</span>` : ''}</button></li>`).join('')}</ul>`
       : `<p class="floor-empty">${esc(t('floorNone'))}</p>`;
-    el.innerHTML = `<p class="eyebrow">${towerName(state.tower)} · ${t('floor')} ${state.floor}</p><h2>${esc(floorHeading(listed.length))}</h2>${totalLine}<p>${t('selectApt')}</p>${legend(state.tower)}
+    el.innerHTML = `<p class="eyebrow">${esc(towerName(state.tower))} · ${esc(t('floor'))} ${esc(state.floor)}</p><h2>${esc(floorHeading(listed.length))}</h2>${totalLine}<p>${t('selectApt')}</p>${legend(state.tower)}
       ${list}
       <div class="floor-grid" style="margin-top:10px;grid-template-columns:repeat(2,1fr)">${state.floor < 36 ? `<button data-floor="${state.floor + 1}">↑ ${state.floor + 1}</button>` : '<span></span>'}${state.floor > 6 ? `<button data-floor="${state.floor - 1}">↓ ${state.floor - 1}</button>` : ''}</div>
       <p class="note">${t('schematicNote')} ${sourceNote(state.tower)}</p>`;
