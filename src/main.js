@@ -118,6 +118,7 @@ function applyI18n() {
     a.textContent = a.dataset.via === 'whatsapp' ? t('whatsapp') : `${t('call')} · ${CONTACT.phone}`;
   });
   paintIntro();
+  renderCrumbs();
   renderLabels(); renderExplorer(); renderCard(); state.scene?.request(); if (!$('#filters').hidden) renderFilters();
   renderApi?.refresh();
   blockMenu?.refresh();
