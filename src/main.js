@@ -1522,6 +1522,11 @@ async function openRender() {
     showOnly('apt');
     renderCard();
     renderExplorer();
+  } else if (state.view === 'floor') {
+    renderApi?.closeQuick();
+    showOnly('explorer');
+    renderExplorer();
+    renderCrumbs();
   }
   blockMenu?.refresh();
   paintPlaceCards();
