@@ -304,7 +304,9 @@ function syncHistory() {
   if (here === url) { histDepth = d; histRender = renderMode; histBlock = blockNow; return; }
   const crossing = histRender !== renderMode;
   const blockChanged = blockNow !== histBlock;
-  if (crossing || d > histDepth || blockChanged) { history.pushState({ hisni: d, render: renderMode, block: blockNow }, '', url); pushed += 1; }
+  // Choosing a block is a step you can go back from. Clearing it replaces this entry so ?block= does not reopen.
+  const blockStep = blockChanged && !!blockNow;
+  if (crossing || d > histDepth || blockStep) { history.pushState({ hisni: d, render: renderMode, block: blockNow }, '', url); pushed += 1; }
   else history.replaceState({ hisni: d, render: renderMode, block: blockNow }, '', url);
   histDepth = d;
   histRender = renderMode;
@@ -326,32 +328,43 @@ function applyDeepLink(params) {
   else Object.assign(state, { view: 'intro', tower: null, floor: null, apt: null });
   const block = params.get('block');
   const known = block && state.doc?.blocks?.some((b) => b.id === block);
-  if (known && state.tower !== block) {
+  // An explicit shallower view wins. Otherwise ?block=I opens that block.
+  const explicitView = v === 'towers' || v === 'intro' || mapMode === 'neighborhood';
+  if (known && state.tower !== block && !explicitView) {
     state.view = 'block';
     state.tower = block;
     state.floor = null;
     state.apt = null;
   }
-  state.filters.block = (state.view === 'block' || state.view === 'floor') ? (state.tower || null) : (known ? block : null);
+  state.filters.block = (state.view === 'block' || state.view === 'floor') ? (state.tower || null) : (known && !explicitView ? block : null);
 }
 // The landing entry becomes the overview. Each deeper level is pushed on top, so Back
 // from a deep link steps up one level instead of leaving the page.
 function seedHistory() {
   const target = { view: state.view, tower: state.tower, floor: state.floor, apt: state.apt };
+  const savedBlock = state.filters.block;
   const d = depthNow();
   const steps = [];
-  if (d >= 1) steps.push({ view: 'towers', tower: null, floor: null, apt: null });
-  if (d >= 2) steps.push({ view: 'block', tower: target.tower, floor: null, apt: null });
-  if (d >= 3) steps.push({ view: 'floor', tower: target.tower, floor: target.floor, apt: null });
-  if (d >= 4) steps.push({ view: 'floor', tower: target.tower, floor: target.floor, apt: target.apt });
+  // On the aerial, ?block=I is one step above the overview, so Back and × leave it in one go.
+  if (renderMode && target.view === 'block' && target.floor == null && !target.apt) {
+    steps.push({ view: 'block', tower: target.tower, floor: null, apt: null, block: target.tower });
+  } else {
+    if (d >= 1) steps.push({ view: 'towers', tower: null, floor: null, apt: null, block: null });
+    if (d >= 2) steps.push({ view: 'block', tower: target.tower, floor: null, apt: null, block: target.tower });
+    if (d >= 3) steps.push({ view: 'floor', tower: target.tower, floor: target.floor, apt: null, block: target.tower });
+    if (d >= 4) steps.push({ view: 'floor', tower: target.tower, floor: target.floor, apt: target.apt, block: target.tower });
+  }
   state.view = 'intro'; state.tower = null; state.floor = null; state.apt = null;
-  history.replaceState({ hisni: 0 }, '', urlForState());
+  state.filters.block = null;
+  history.replaceState({ hisni: 0, render: renderMode, block: '' }, '', urlForState());
   for (const step of steps) {
-    Object.assign(state, step);
-    history.pushState({ hisni: depthNow() }, '', urlForState());
+    state.view = step.view; state.tower = step.tower; state.floor = step.floor; state.apt = step.apt;
+    state.filters.block = step.block || null;
+    history.pushState({ hisni: depthNow(), render: renderMode, block: step.block || '' }, '', urlForState());
   }
   Object.assign(state, target);
-  seeded = true; seedDepth = 0; histDepth = d; pushed = d; histRender = renderMode; histBlock = state.filters?.block || '';
+  state.filters.block = savedBlock;
+  seeded = true; seedDepth = 0; histDepth = d; pushed = steps.length; histRender = renderMode; histBlock = savedBlock || '';
 }
 function renderShell() {
   paintIntro();
@@ -369,12 +382,16 @@ function applyHistoryUrl() {
     if (!renderMode) openRender();
     else {
       const block = state.filters.block;
-      if (block) renderApi?.setBlock(block);
+      if (block && (state.view === 'block' || state.view === 'floor')) renderApi?.setBlock(block);
       else renderApi?.setBlock(null);
       blockMenu?.refresh();
       document.documentElement.dataset.view = state.view;
+      if (state.view === 'floor') applyFloorStatusDefault();
+      if (state.view === 'intro') closeRenderSheet();
+      else if (state.view === 'towers') { showOnly('explorer'); renderExplorer(); }
+      else if (state.view === 'floor') { showOnly('explorer'); renderExplorer(); }
+      else if (state.view === 'block') closeRenderSheet();
       renderCrumbs();
-      if (state.view === 'intro') { $('#explorer').hidden = true; $('#apt-card').hidden = true; }
       if (p.get('filters') === '1') { showOnly('filters'); renderFilters(); }
       else if (!$('#filters').hidden) renderFilters();
     }
@@ -518,6 +535,19 @@ function setView(v, opts = {}) {
     if (v === 'floor') { S.highlightTower(null); S.buildFloor(state.tower, state.floor, floorApts(), (a) => statusColorHex[a.status] ?? 0x999999); recolor(); S.focusFloor(state.tower, state.floor); }
   }
   if (v !== 'floor') state.apt = null;
+  if (renderMode) {
+    if (v === 'block' || v === 'floor') renderApi?.setBlock(state.tower || null);
+    else renderApi?.setBlock(null);
+  }
+  if (renderMode && v === 'intro') {
+    closeRenderSheet();
+    renderCrumbs();
+    syncHistory();
+    blockMenu?.refresh();
+    markTowerBadges();
+    track('view_change', { view: state.view, tower: state.tower || '', floor: state.floor ?? '' });
+    return;
+  }
   if (keepSheet && !$('#filters').hidden) {
     renderCrumbs();
     renderExplorer();
@@ -547,14 +577,24 @@ function recolor() {
 }
 
 function renderCrumbs() {
-  const c = $('#crumbs'); c.hidden = state.view === 'intro'; if (c.hidden) return;
+  const c = $('#crumbs'); c.hidden = state.view === 'intro'; if (c.hidden) { c.innerHTML = ''; return; }
   const items = [['intro', t('neighborhood')], ['towers', t('towers')]];
   if (state.tower) items.push(['block', towerName(state.tower)]);
   if (state.view === 'floor') items.push(['floor', `${t('floor')} ${state.floor}`]);
   const cut = items.findIndex(([k]) => k === state.view);
-  c.innerHTML = items.slice(0, cut + 1).map(([k, l], i, arr) => `<button data-go="${k}" ${i === arr.length - 1 ? 'aria-current="step"' : ''}>${esc(l)}</button>`).join('');
+  const close = renderMode && state.tower && $('#explorer').hidden
+    ? `<button type="button" class="crumb-x" data-close-block aria-label="${esc(t('close'))}">×</button>`
+    : '';
+  c.innerHTML = items.slice(0, cut + 1).map(([k, l], i, arr) => `<button data-go="${k}" ${i === arr.length - 1 ? 'aria-current="step"' : ''}>${esc(l)}</button>`).join('') + close;
 }
-$('#crumbs').addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (!b) return; const k = b.dataset.go; if (k === 'intro') setView('intro', { tower: null }); else if (k === 'towers') setView('towers', { tower: null }); else if (k === 'block') setView('block'); });
+$('#crumbs').addEventListener('click', (e) => {
+  if (e.target.closest('[data-close-block]')) {
+    if (pushed > 0) history.go(-pushed);
+    else setView('intro', { tower: null, floor: null });
+    return;
+  }
+  const b = e.target.closest('[data-go]'); if (!b) return; const k = b.dataset.go; if (k === 'intro') setView('intro', { tower: null }); else if (k === 'towers') setView('towers', { tower: null }); else if (k === 'block') setView('block');
+});
 
 function blockOf(id) { return state.doc.blocks.find((x) => x.id === id); }
 function blockSource(id) { return blockOf(id)?.source; }
@@ -1470,6 +1510,7 @@ async function openRender() {
   const carry = (state.view === 'block' || state.view === 'floor') ? state.tower : null;
   await renderApi?.show();
   if (carry) renderApi?.setBlock(carry);
+  renderCrumbs();
   blockMenu?.refresh();
   paintPlaceCards();
   $('#loading').classList.add('done');
