@@ -352,7 +352,8 @@ function seedHistory() {
   const savedBlock = state.filters.block;
   const d = depthNow();
   const steps = [];
-  // On the aerial, ?block=I is one step above the overview, so Back and × leave it in one go.
+  // On the aerial, ?block=I is one step above the overview, so the browser Back button
+  // steps up to it. The crumb × does not use that stack: history.go can leave for biograpi.ge.
   if (renderMode && target.view === 'block' && target.floor == null && !target.apt) {
     steps.push({ view: 'block', tower: target.tower, floor: null, apt: null, block: target.tower });
   } else {
@@ -481,8 +482,12 @@ function hideTour() {
 }
 function requestCloseTour() {
   if (!tourOpen || tourClosing) return;
-  if (tourPushed) { tourClosing = true; history.back(); }
-  else { tourOpen = false; hideTour(); }
+  tourOpen = false;
+  tourPushed = false;
+  tourClosing = false;
+  hideTour();
+  // Replace the tour entry. history.back() can leave hisni.biograpi.ge when the previous entry is biograpi.ge.
+  history.replaceState({ ...(history.state || {}), tour: 0, hisni: depthNow(), render: renderMode }, '', urlForState());
 }
 function openTour(n) {
   const view = [1, 2, 3].includes(+n) ? +n : 1;
@@ -596,8 +601,10 @@ function renderCrumbs() {
 }
 $('#crumbs').addEventListener('click', (e) => {
   if (e.target.closest('[data-close-block]')) {
-    if (pushed > 0) history.go(-pushed);
-    else setView('intro', { tower: null, floor: null });
+    e.preventDefault();
+    e.stopPropagation();
+    // Stay on this site. history.go() walks into biograpi.ge when the block link was opened from there.
+    setView('intro', { tower: null, floor: null });
     return;
   }
   const b = e.target.closest('[data-go]'); if (!b) return; const k = b.dataset.go; if (k === 'intro') setView('intro', { tower: null }); else if (k === 'towers') setView('towers', { tower: null }); else if (k === 'block') setView('block');
@@ -697,16 +704,19 @@ function collapseSheet() {
 }
 function closeApt() {
   if (!state.apt && $('#apt-card').hidden) return;
-  if (state.apt && pushed > 0) { history.back(); return; }
-  state.apt = null; renderCard(); renderExplorer(); recolor(); syncHistory();
+  state.apt = null;
+  renderCard();
+  renderExplorer();
+  recolor();
+  syncHistory();
 }
 function stepBack() {
   if (!$('#apt-card').hidden) { closeApt(); return; }
   if (!$('#filters').hidden || !$('#place-card').hidden) { showOnly(basePanel()); syncHistory(); return; }
-  if (pushed > 0) { history.back(); return; }
+  // Step up inside the site. history.back() can exit to biograpi.ge from a deep link.
   if (state.view === 'floor') setView('block');
-  else if (state.view === 'block') setView('towers', { tower: null });
-  else if (state.view === 'towers') setView('intro', { tower: null });
+  else if (state.view === 'block') setView(renderMode ? 'intro' : 'towers', { tower: null, floor: null });
+  else if (state.view === 'towers') setView('intro', { tower: null, floor: null });
   else showOnly('intro');
 }
 $('#explorer-close').addEventListener('click', (e) => { e.stopPropagation(); stepBack(); });
@@ -1253,9 +1263,7 @@ function goHome() {
     openRender().then(() => { renderApi?.home(); syncHistory(); });
     return;
   }
-  state.apt = null;
-  if (pushed > 0) history.go(-pushed);
-  else setView('intro', { tower: null, floor: null });
+  setView('intro', { tower: null, floor: null });
 }
 let homeAt = 0;
 function onHome(e) {
