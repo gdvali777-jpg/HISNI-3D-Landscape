@@ -233,6 +233,18 @@ function floorCountLabel(n) {
   const sts = [...state.filters.statuses];
   return sts.length === 1 ? `${n} ${statusLabel(sts[0])}` : `${n} ${t('apartments')}`;
 }
+// A green floor (it has a free apartment) opens on free apartments until the user picks other chips.
+function applyFloorStatusDefault() {
+  if (state.view !== 'floor' || statusFilterOn()) return;
+  const open = { ...state.filters, statuses: new Set() };
+  const hasFree = floorApts().some((a) => a.status === 'available' && matches(a, open));
+  if (hasFree) state.filters.statuses = new Set(['available']);
+}
+function floorHeading(shown) {
+  const sts = STATUSES.filter((s) => state.filters.statuses.has(s));
+  if (!sts.length) return `${t('onFloor')}: ${shown} ${t('apartments')}`;
+  return `${sts.map(statusLabel).join(', ')}: ${shown} ${t('apartments')}`;
+}
 function announce(msg) { $('#announce').textContent = msg; }
 const towerName = (id) => `${t('block')} ${id}`;
 
@@ -343,6 +355,7 @@ function seedHistory() {
 }
 function renderShell() {
   paintIntro();
+  if (state.view === 'floor') applyFloorStatusDefault();
   if (state.apt && aptById(state.apt)) { renderCrumbs(); renderExplorer(); renderCard(); }
   else { showOnly(state.view === 'intro' ? 'intro' : 'explorer'); renderCrumbs(); renderExplorer(); }
 }
@@ -494,6 +507,8 @@ function setView(v, opts = {}) {
   delete next.keepSheet;
   expandSheet();
   Object.assign(state, { view: v }, next);
+  state.filters.block = (v === 'block' || v === 'floor') ? (state.tower || null) : null;
+  if (v === 'floor') applyFloorStatusDefault();
   document.documentElement.dataset.view = v;
   const S = state.scene;
   if (S) {
@@ -503,7 +518,6 @@ function setView(v, opts = {}) {
     if (v === 'floor') { S.highlightTower(null); S.buildFloor(state.tower, state.floor, floorApts(), (a) => statusColorHex[a.status] ?? 0x999999); recolor(); S.focusFloor(state.tower, state.floor); }
   }
   if (v !== 'floor') state.apt = null;
-  state.filters.block = (v === 'block' || v === 'floor') ? (state.tower || null) : null;
   if (keepSheet && !$('#filters').hidden) {
     renderCrumbs();
     renderExplorer();
@@ -595,9 +609,14 @@ function renderExplorer() {
       <div class="floor-grid ${countClass}" role="group" aria-label="${t('chooseFloor')}">${floors.map((f) => { const n = floorCount(b.id, f); return `<button data-floor="${f}" class="${n ? '' : 'none'}" aria-label="${esc(t('floor'))} ${f}, ${esc(floorCountLabel(n))}"><b>${f}</b><small>${n}</small></button>`; }).join('')}</div>
       <p class="note">${b.typical_floor_plan ? `<a href="${BASE}${b.typical_floor_plan}" target="_blank" rel="noopener">${t('typeL')} ↗</a> · ` : ''}${sourceNote(b.id)}</p>`;
   } else if (state.view === 'floor') {
-    const apts = floorApts();
-    el.innerHTML = `<p class="eyebrow">${towerName(state.tower)} · ${t('floor')} ${state.floor}</p><h2>${t('onFloor')}: ${filteredCount(apts)} ${t('apartments')}</h2><p>${t('selectApt')}</p>${legend(state.tower)}
-      <ul class="apt-list">${apts.map((a) => `<li><button data-apt="${a.id}" ${a.id === state.apt ? 'aria-current="true"' : ''} style="${filtersActive() && !matches(a) ? 'opacity:.45' : ''}"><i class="dot ${a.status}"></i><span><b>№ ${a.number}</b> · ${kindLabel(a.type.kind)}<br/><span class="meta">${a.area} ${m2()} · ${statusLabel(a.status)}</span></span>${showsPrice(a) ? `<span class="pr">${priceOf(a)}</span>` : ''}</button></li>`).join('')}</ul>
+    const all = floorApts();
+    const listed = statusFilterOn() ? all.filter((a) => state.filters.statuses.has(a.status)) : all;
+    const totalLine = listed.length !== all.length ? `<p class="floor-total">${esc(t('floorAll'))} ${all.length} ${esc(t('apartments'))}</p>` : '';
+    const list = listed.length
+      ? `<ul class="apt-list">${listed.map((a) => `<li><button data-apt="${a.id}" ${a.id === state.apt ? 'aria-current="true"' : ''} style="${filtersActive() && !matches(a) ? 'opacity:.45' : ''}"><i class="dot ${a.status}"></i><span><b>№ ${a.number}</b> · ${kindLabel(a.type.kind)}<br/><span class="meta">${a.area} ${m2()} · ${statusLabel(a.status)}</span></span>${showsPrice(a) ? `<span class="pr">${priceOf(a)}</span>` : ''}</button></li>`).join('')}</ul>`
+      : `<p class="floor-empty">${esc(t('floorNone'))}</p>`;
+    el.innerHTML = `<p class="eyebrow">${towerName(state.tower)} · ${t('floor')} ${state.floor}</p><h2>${esc(floorHeading(listed.length))}</h2>${totalLine}<p>${t('selectApt')}</p>${legend(state.tower)}
+      ${list}
       <div class="floor-grid" style="margin-top:10px;grid-template-columns:repeat(2,1fr)">${state.floor < 36 ? `<button data-floor="${state.floor + 1}">↑ ${state.floor + 1}</button>` : '<span></span>'}${state.floor > 6 ? `<button data-floor="${state.floor - 1}">↓ ${state.floor - 1}</button>` : ''}</div>
       <p class="note">${t('schematicNote')} ${sourceNote(state.tower)}</p>`;
   }

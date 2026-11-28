@@ -247,6 +247,8 @@ footer a { color: inherit; display: inline-flex; align-items: center; min-height
 .legend-chip[aria-pressed="true"] .dot { background: currentColor; }
 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: -1px; }
 .dot.available { background: var(--available); } .dot.reserved { background: var(--reserved); } .dot.sold { background: var(--sold); } .dot.queue { background: var(--queue); } .dot.nfs { background: var(--nfs); }
+.floor-total { margin-top: -6px; }
+.floor-empty { margin: 4px 0 10px; }
 .apt-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .apt-list button { width: 100%; min-height: var(--control-h-lg); display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 10px; border: 1px solid var(--border); background: #fff; border-radius: var(--radius-sm); padding: 6px var(--space-3); text-align: left; }
 .apt-list button:hover { border-color: var(--border-strong); }
