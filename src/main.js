@@ -1516,6 +1516,13 @@ async function openRender() {
   await renderApi?.show();
   if (carry) renderApi?.setBlock(carry);
   renderCrumbs();
+  // A shared apartment link must open the card. Render startup otherwise hides it and leaves the quick filter.
+  if (state.apt && aptById(state.apt)) {
+    renderApi?.closeQuick();
+    showOnly('apt');
+    renderCard();
+    renderExplorer();
+  }
   blockMenu?.refresh();
   paintPlaceCards();
   $('#loading').classList.add('done');
