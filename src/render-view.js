@@ -314,10 +314,10 @@ export async function createRenderView(opts) {
       const active = selected === id;
       if (active && opts.block(id)?.has_data) {
         for (const band of floorEdges(poly, cfg.floorMin, cfg.floorMax, frame.floorK ?? 0.32)) {
-          parts.push(`<polygon class="floor-band" data-block="${id}" data-floor="${band.floor}" points="${pts(band.poly)}" fill="${bandFill(id, band.floor)}" tabindex="0" role="button" aria-label="${opts.towerName(id)} ${opts.t('floor')} ${band.floor}"/>`);
+          parts.push(`<polygon class="floor-band" data-block="${id}" data-floor="${band.floor}" points="${pts(band.poly)}" fill="${bandFill(id, band.floor)}" tabindex="-1" role="button" aria-label="${opts.towerName(id)} ${opts.t('floor')} ${band.floor}"/>`);
         }
       } else {
-        parts.push(`<polygon class="block-hit ${active ? 'is-on' : ''}" data-block="${id}" points="${pts(poly)}" tabindex="0" role="button" aria-label="${chipText(id)}"/>`);
+        parts.push(`<polygon class="block-hit ${active ? 'is-on' : ''}" data-block="${id}" points="${pts(poly)}" tabindex="-1" role="button" aria-label="${chipText(id)}"/>`);
       }
     }
     svg.innerHTML = parts.join('');
