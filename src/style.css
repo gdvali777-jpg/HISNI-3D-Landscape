@@ -587,6 +587,12 @@ html.boot-render footer, html.boot-render #hint, html.boot-render #loading { dis
   .tour-cards { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: var(--space-1); }
   .tour-card { flex: 0 0 78%; scroll-snap-align: start; aspect-ratio: 16/9; }
 }
+@media (max-width: 400px) and (min-height: 521px) {
+  :root {
+    /* The nav wraps onto its own lines, so the breadcrumbs need a third header row. */
+    --top-stage: calc(var(--top-safe) + 3 * var(--control-h) + 3 * var(--space-2));
+  }
+}
 @media (max-width: 819px) and (min-height: 521px) and (max-width: 380px) {
   .header-right .chip:not(.lang):not(.icon-i) { padding: 0 10px; }
   .back-list, #block-btn, #places-btn { padding: 0 10px; }
