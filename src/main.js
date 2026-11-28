@@ -114,7 +114,9 @@ function applyI18n() {
   $('#explorer-close').title = t('close');
   $('#explorer-handle').setAttribute('aria-label', t(collapsed ? 'sheetExpand' : 'sheetCollapse'));
   document.documentElement.lang = getLang();
-  document.querySelectorAll('[data-call]').forEach((a) => { a.textContent = callLabel(a.dataset.call === 'form'); });
+  document.querySelectorAll('[data-call]').forEach((a) => {
+    a.textContent = a.dataset.via === 'whatsapp' ? t('whatsapp') : `${t('call')} · ${CONTACT.phone}`;
+  });
   paintIntro();
   renderLabels(); renderExplorer(); renderCard(); state.scene?.request(); if (!$('#filters').hidden) renderFilters();
   renderApi?.refresh();
@@ -1082,19 +1084,20 @@ function liftBitrixWindow() {
   if (mount) lead.appendChild(mount);
 }
 new MutationObserver(liftBitrixWindow).observe(document.body, { childList: true });
-// Desktop has nothing to place a tel: call with, so the call buttons open a WhatsApp chat there.
-// Phones and tablets keep the tel: link.
-const callViaWhatsApp = () => matchMedia('(hover: hover) and (pointer: fine)').matches;
-const callHref = () => (callViaWhatsApp() ? CONTACT.whatsapp : CONTACT.tel);
-const callAttrs = () => (callViaWhatsApp() ? `href="${CONTACT.whatsapp}" target="_blank" rel="noopener"` : `href="${CONTACT.tel}"`);
+// Call is always the office line. WhatsApp is a separate button beside it.
 function wireCall(a) {
-  a.href = callHref();
-  if (callViaWhatsApp()) { a.target = '_blank'; a.rel = 'noopener'; }
-  else { a.removeAttribute('target'); a.removeAttribute('rel'); }
+  if (a.dataset.via === 'whatsapp') {
+    a.href = CONTACT.whatsapp;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    return;
+  }
+  a.href = CONTACT.tel;
+  a.removeAttribute('target');
+  a.removeAttribute('rel');
 }
-const callLabel = (withNumber) => (withNumber ? `${t('call')} · ${callViaWhatsApp() ? CONTACT.whatsappPhone : CONTACT.phone}` : t('call'));
-function callLink(place, withNumber = false) {
-  return `<a class="call-btn" ${callAttrs()} data-call="${place}">${esc(callLabel(withNumber))}</a>`;
+function callLink(place) {
+  return `<span class="call-pair"><a class="call-btn" href="${CONTACT.tel}" data-call="${place}" data-via="tel">${esc(t('call'))} · ${esc(CONTACT.phone)}</a><a class="call-btn wa" href="${CONTACT.whatsapp}" target="_blank" rel="noopener" data-call="${place}" data-via="whatsapp">${esc(t('whatsapp'))}</a></span>`;
 }
 function openLead(id, { notify = false } = {}) {
   const a = aptById(id); const d = $('#lead');
@@ -1121,7 +1124,7 @@ function openLead(id, { notify = false } = {}) {
 }
 document.addEventListener('click', (e) => {
   const a = e.target.closest('[data-call]');
-  if (a) track('call_click', { place: a.dataset.call, via: callViaWhatsApp() ? 'whatsapp' : 'tel' });
+  if (a) track('call_click', { place: a.dataset.call, via: a.dataset.via || 'tel' });
 });
 
 // ---------- about ----------
@@ -1475,7 +1478,7 @@ document.addEventListener('pointerdown', (e) => {
 });
 function renderHooks() {
   return {
-    t, lang: getLang, callAttrs, towerName, statusLabel,
+    t, lang: getLang, callButtons: () => callLink('render'), towerName, statusLabel,
     counts: filterCounts,
     showList: openFilterSheet,
     apartments: () => state.doc.apartments,
