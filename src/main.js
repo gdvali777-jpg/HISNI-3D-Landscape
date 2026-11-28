@@ -656,6 +656,11 @@ function renderExplorer() {
       <div class="floor-grid ${countClass}" role="group" aria-label="${t('chooseFloor')}">${floors.map((f) => { const n = floorCount(b.id, f); return `<button data-floor="${f}" class="${n ? '' : 'none'}" aria-label="${esc(t('floor'))} ${f}, ${esc(floorCountLabel(n))}"><b>${f}</b><small>${n}</small></button>`; }).join('')}</div>
       <p class="note">${b.typical_floor_plan ? `<a href="${BASE}${b.typical_floor_plan}" target="_blank" rel="noopener">${t('typeL')} ↗</a> · ` : ''}${sourceNote(b.id)}</p>`;
   } else if (state.view === 'floor') {
+    const block = blockOf(state.tower);
+    if (block && !block.has_data) {
+      el.innerHTML = `<p class="eyebrow">${esc(towerName(block.id))}</p><h2>${esc(towerName(block.id))}</h2><p>${t('noData')}</p>`;
+      return;
+    }
     const all = floorApts();
     const listed = listedOnFloor(state.doc.apartments, state.tower, state.floor, statusFilterOn() ? state.filters.statuses : null);
     const totalLine = listed.length !== all.length ? `<p class="floor-total">${esc(t('floorAll'))} ${all.length} ${esc(t('apartments'))}</p>` : '';
