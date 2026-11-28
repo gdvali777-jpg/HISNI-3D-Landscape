@@ -30,6 +30,7 @@ export const STRINGS = {
     avail: 'თავისუფალი', reserved: 'დაჯავშნილი', sold: 'გაყიდული', nfs: 'არ იყიდება', queue: 'ჯავშნის რიგი',
     soldPrice: 'გაყიდულია', reservedPrice: 'დაჯავშნილია',
     availableShort: 'თავისუფ.', onFloor: 'ამ სართულზე', allApts: 'ყველა ბინა',
+    floorAll: 'სულ', floorNone: 'ამ სტატუსით ამ სართულზე ბინა არ არის.',
     selectApt: 'შეეხე ბინას გეგმაზე ან აირჩიე სიიდან.',
     area: 'ფართი', rooms: 'ტიპი', orientation: 'მხარე', status: 'სტატუსი', price: 'ფასი', floorL: 'სართული', typeL: 'გეგმა',
     studio: 'სტუდიო', '1br': '1 საძინებელი', '2br': '2 საძინებელი',
@@ -115,6 +116,7 @@ export const STRINGS = {
     avail: 'Available', reserved: 'Reserved', sold: 'Sold', nfs: 'Not for sale', queue: 'Reservation queue',
     soldPrice: 'Sold', reservedPrice: 'Reserved',
     availableShort: 'avail.', onFloor: 'On this floor', allApts: 'All apartments',
+    floorAll: 'In total', floorNone: 'No apartments on this floor for the selected status.',
     selectApt: 'Tap an apartment on the plan or choose from the list.',
     area: 'Area', rooms: 'Type', orientation: 'Facing', status: 'Status', price: 'Price', floorL: 'Floor', typeL: 'Plan',
     studio: 'Studio', '1br': '1 bedroom', '2br': '2 bedrooms',
@@ -175,6 +177,9 @@ export const STRINGS = {
     navLabel: 'Навигация', backList: '← Список квартир', backListHref: 'https://biograpi.ge/ru/hi1/apartments?view=grid',
     formSending: 'Отправляем заявку…',
     formSentToast: 'Заявка отправлена. Консультант скоро свяжется с вами.',
+    avail: 'Свободна', reserved: 'Забронирована', sold: 'Продана', nfs: 'Не продаётся', queue: 'Очередь',
+    onFloor: 'На этом этаже', apartments: 'квартир',
+    floorAll: 'Всего', floorNone: 'На этом этаже нет квартир с выбранным статусом.',
   },
 };
 let lang = typeof window === 'undefined' ? 'ka' : (['en', 'ru'].includes(new URLSearchParams(location.search).get('lang') || localStorage.getItem('hisni-lang')) ? (new URLSearchParams(location.search).get('lang') || localStorage.getItem('hisni-lang')) : 'ka');
