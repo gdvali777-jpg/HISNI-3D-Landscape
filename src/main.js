@@ -1390,6 +1390,22 @@ function pickedBlock() {
   if (state.view === 'block' || state.view === 'floor') return state.tower || null;
   return null;
 }
+function rememberBlock(id) {
+  state.filters.block = id || null;
+  if (!id) {
+    if (renderMode) clearRenderSelection();
+    return;
+  }
+  state.view = 'block';
+  state.tower = id;
+  state.floor = null;
+  state.apt = null;
+  document.documentElement.dataset.view = 'block';
+  renderCrumbs();
+  if (renderMode && blockOf(id)?.has_data) closeRenderSheet();
+  blockMenu?.refresh();
+  syncHistory();
+}
 const blockMenu = mountBlockMenu($('#block-menu-root'), {
   t,
   blocks: () => state.doc?.blocks || [],
@@ -1401,17 +1417,14 @@ const blockMenu = mountBlockMenu($('#block-menu-root'), {
   },
   selected: pickedBlock,
   onSelect(id) {
-    state.filters.block = id || null;
     if (renderMode) {
       renderApi?.setBlock(id);
-      if (!id) clearRenderSelection();
-      else if (blockOf(id)?.has_data) closeRenderSheet();
-      blockMenu?.refresh();
+      rememberBlock(id);
       if (!$('#filters').hidden) renderFilters();
       renderApi?.refresh();
-      syncHistory();
       return;
     }
+    state.filters.block = id || null;
     if (!id) setView('intro', { tower: null, floor: null });
     else setView('block', { tower: id });
   },
@@ -1502,10 +1515,7 @@ function renderHooks() {
     onFloor(id, floor) { setView('floor', { tower: id, floor }); },
     onSoon(id) { setView('block', { tower: id }); },
     onBlock(id) {
-      state.filters.block = id || null;
-      if (renderMode && !id) clearRenderSelection();
-      else if (renderMode && blockOf(id)?.has_data) closeRenderSheet();
-      blockMenu?.refresh();
+      rememberBlock(id);
       if (!$('#filters').hidden) renderFilters();
     },
   };
