@@ -668,7 +668,7 @@ function renderExplorer() {
     const list = listed.length
       ? `<ul class="apt-list">${listed.map((a) => `<li><button data-apt="${a.id}" ${a.id === state.apt ? 'aria-current="true"' : ''} style="${filtersActive() && !matches(a) ? 'opacity:.45' : ''}"><i class="dot ${a.status}"></i><span><b>№ ${a.number}</b> · ${kindLabel(a.type.kind)}<br/><span class="meta">${a.area} ${m2()} · ${statusLabel(a.status)}</span></span>${showsPrice(a) ? `<span class="pr">${priceOf(a)}</span>` : ''}</button></li>`).join('')}</ul>`
       : `<p class="floor-empty">${esc(t('floorNone'))}</p>`;
-    el.innerHTML = `<p class="eyebrow">${esc(towerName(state.tower))} · ${esc(t('floor'))} ${esc(state.floor)}</p><h2>${esc(floorHeading(listed.length))}</h2>${totalLine}<p>${t('selectApt')}</p>${legend(state.tower)}
+    el.innerHTML = `<p class="eyebrow">${esc(towerName(state.tower))} · ${esc(t('floor'))} ${esc(state.floor)}</p><h2>${esc(floorHeading(listed.length))}</h2>${totalLine}<p>${renderMode ? t('selectAptList') : t('selectApt')}</p>${legend(state.tower)}
       ${list}
       <div class="floor-grid" style="margin-top:10px;grid-template-columns:repeat(2,1fr)">${state.floor < 36 ? `<button data-floor="${state.floor + 1}">↑ ${state.floor + 1}</button>` : '<span></span>'}${state.floor > 6 ? `<button data-floor="${state.floor - 1}">↓ ${state.floor - 1}</button>` : ''}</div>
       <p class="note">${t('schematicNote')} ${sourceNote(state.tower)}</p>`;
